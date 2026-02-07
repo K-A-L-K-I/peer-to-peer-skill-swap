@@ -104,7 +104,68 @@ const loginUser = async (req, res) => {
   }
 };
 
+const getUserProfile = async (req, res) => {
+  try {
+    return res.status(200).json({
+      user: req.user
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message || 'Server error' });
+  }
+};
+
+const updateUserProfile = async (req, res) => {
+  try {
+    const { name, email, password, skillsOffered, skillsWanted } = req.body;
+
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (email && email.toLowerCase() !== user.email) {
+      const existingEmail = await User.findOne({ email: email.toLowerCase() });
+      if (existingEmail) {
+        return res.status(400).json({ message: 'Email already in use' });
+      }
+    }
+
+    user.name = name || user.name;
+    user.email = email ? email.toLowerCase() : user.email;
+    user.skillsOffered = Array.isArray(skillsOffered)
+      ? skillsOffered
+      : user.skillsOffered;
+    user.skillsWanted = Array.isArray(skillsWanted)
+      ? skillsWanted
+      : user.skillsWanted;
+
+    if (password) {
+      user.password = password;
+    }
+
+    const updatedUser = await user.save();
+
+    return res.status(200).json({
+      message: 'Profile updated successfully',
+      user: {
+        id: updatedUser._id,
+        name: updatedUser.name,
+        email: updatedUser.email,
+        role: updatedUser.role,
+        isBlocked: updatedUser.isBlocked,
+        skillsOffered: updatedUser.skillsOffered,
+        skillsWanted: updatedUser.skillsWanted
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message || 'Server error' });
+  }
+};
+
 module.exports = {
   registerUser,
-  loginUser
+  loginUser,
+  getUserProfile,
+  updateUserProfile
 };
