@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const SkillSwapRequest = require('../models/SkillSwapRequest');
+const Notification = require('../models/Notification');
 
 const sendSkillSwapRequest = async (req, res) => {
   try {
@@ -51,6 +52,15 @@ const sendSkillSwapRequest = async (req, res) => {
       .populate('fromUser', 'name email skillsOffered skillsWanted role isBlocked')
       .populate('toUser', 'name email skillsOffered skillsWanted role isBlocked');
 
+    await Notification.create({
+      user: toUser,
+      type: 'swap_request',
+      title: 'New Skill Swap Request',
+      body: `${req.user.name} sent you a swap request`,
+      relatedModel: 'SkillSwapRequest',
+      relatedId: swapRequest._id
+    });
+
     return res.status(201).json({
       message: 'Skill swap request sent successfully',
       request: populatedRequest
@@ -87,6 +97,15 @@ const respondToSkillSwapRequest = async (req, res, newStatus) => {
   const populatedRequest = await SkillSwapRequest.findById(swapRequest._id)
     .populate('fromUser', 'name email skillsOffered skillsWanted role isBlocked')
     .populate('toUser', 'name email skillsOffered skillsWanted role isBlocked');
+
+  await Notification.create({
+    user: swapRequest.fromUser,
+    type: 'swap_request',
+    title: 'Skill Swap Request Updated',
+    body: `Your skill swap request was ${newStatus}`,
+    relatedModel: 'SkillSwapRequest',
+    relatedId: swapRequest._id
+  });
 
   return res.status(200).json({
     message: `Skill swap request ${newStatus}`,

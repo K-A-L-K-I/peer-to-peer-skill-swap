@@ -1,5 +1,6 @@
 const Message = require('../models/Message');
 const SkillSwapRequest = require('../models/SkillSwapRequest');
+const Notification = require('../models/Notification');
 
 const getAcceptedSwapRequestForUser = async (swapRequestId, userId) => {
   const swapRequest = await SkillSwapRequest.findById(swapRequestId);
@@ -63,6 +64,15 @@ const sendMessage = async (req, res) => {
       .populate('sender', 'name email')
       .populate('receiver', 'name email')
       .populate('swapRequest', 'status offeredSkill wantedSkill');
+
+    await Notification.create({
+      user: receiverId,
+      type: 'message',
+      title: 'New Message',
+      body: `${req.user.name} sent you a message`,
+      relatedModel: 'Message',
+      relatedId: message._id
+    });
 
     return res.status(201).json({
       message: 'Message sent successfully',
