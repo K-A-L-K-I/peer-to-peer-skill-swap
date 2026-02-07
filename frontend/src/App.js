@@ -46,6 +46,7 @@ function App() {
   const handleLogin = (newToken, newUser) => {
     localStorage.setItem('token', newToken);
     localStorage.setItem('user', JSON.stringify(newUser));
+    setAuthToken(newToken);
     setToken(newToken);
     setUser(newUser);
     setPage('profile');
