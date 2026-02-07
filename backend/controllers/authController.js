@@ -16,6 +16,10 @@ const generateToken = (id) => {
 
 const registerUser = async (req, res) => {
   try {
+    if (!process.env.JWT_SECRET) {
+      return res.status(500).json({ message: 'JWT_SECRET is not configured' });
+    }
+
     const { name, email, password, skillsOffered, skillsWanted } = req.body;
 
     if (!name || !email || !password) {
@@ -54,12 +58,27 @@ const registerUser = async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('Register error:', error);
+
+    if (error.code === 11000) {
+      return res.status(400).json({ message: 'User already exists' });
+    }
+
+    if (error.name === 'ValidationError') {
+      const firstError = Object.values(error.errors)[0];
+      return res.status(400).json({ message: firstError?.message || 'Invalid input' });
+    }
+
     return res.status(500).json({ message: error.message || 'Server error' });
   }
 };
 
 const loginUser = async (req, res) => {
   try {
+    if (!process.env.JWT_SECRET) {
+      return res.status(500).json({ message: 'JWT_SECRET is not configured' });
+    }
+
     const { email, password } = req.body;
 
     if (!email || !password) {
@@ -100,6 +119,7 @@ const loginUser = async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('Login error:', error);
     return res.status(500).json({ message: error.message || 'Server error' });
   }
 };
