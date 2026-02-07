@@ -60,6 +60,58 @@ const sendSkillSwapRequest = async (req, res) => {
   }
 };
 
+const respondToSkillSwapRequest = async (req, res, newStatus) => {
+  const swapRequest = await SkillSwapRequest.findById(req.params.id);
+
+  if (!swapRequest) {
+    return res.status(404).json({ message: 'Skill swap request not found' });
+  }
+
+  if (String(swapRequest.toUser) !== String(req.user._id)) {
+    return res
+      .status(403)
+      .json({ message: 'Only the recipient can respond to this request' });
+  }
+
+  if (swapRequest.status !== 'pending') {
+    return res
+      .status(400)
+      .json({ message: `Request already ${swapRequest.status}` });
+  }
+
+  swapRequest.status = newStatus;
+  swapRequest.respondedAt = new Date();
+
+  await swapRequest.save();
+
+  const populatedRequest = await SkillSwapRequest.findById(swapRequest._id)
+    .populate('fromUser', 'name email skillsOffered skillsWanted role isBlocked')
+    .populate('toUser', 'name email skillsOffered skillsWanted role isBlocked');
+
+  return res.status(200).json({
+    message: `Skill swap request ${newStatus}`,
+    request: populatedRequest
+  });
+};
+
+const acceptSkillSwapRequest = async (req, res) => {
+  try {
+    return respondToSkillSwapRequest(req, res, 'accepted');
+  } catch (error) {
+    return res.status(500).json({ message: error.message || 'Server error' });
+  }
+};
+
+const rejectSkillSwapRequest = async (req, res) => {
+  try {
+    return respondToSkillSwapRequest(req, res, 'rejected');
+  } catch (error) {
+    return res.status(500).json({ message: error.message || 'Server error' });
+  }
+};
+
 module.exports = {
-  sendSkillSwapRequest
+  sendSkillSwapRequest,
+  acceptSkillSwapRequest,
+  rejectSkillSwapRequest
 };
