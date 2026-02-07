@@ -6,6 +6,7 @@ const userRoutes = require('./routes/userRoutes');
 const swapRequestRoutes = require('./routes/swapRequestRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const reviewRoutes = require('./routes/reviewRoutes');
+const reportRoutes = require('./routes/reportRoutes');
 dotenv.config();
 
 const app = express();
@@ -18,6 +19,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/swap-requests', swapRequestRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/reviews', reviewRoutes);
+app.use('/api/reports', reportRoutes);
 app.get('/', (req, res) => {
   res.status(200).json({ message: 'Skill Swap API is running' });
 });
