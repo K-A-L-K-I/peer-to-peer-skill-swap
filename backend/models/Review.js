@@ -34,4 +34,6 @@ const reviewSchema = new mongoose.Schema(
   }
 );
 
+reviewSchema.index({ reviewer: 1, swapRequest: 1 }, { unique: true });
+
 module.exports = mongoose.model('Review', reviewSchema);
