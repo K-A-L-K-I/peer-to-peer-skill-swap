@@ -3,6 +3,8 @@ import './App.css';
 import { setAuthToken } from './services/api';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import ResetPasswordPage from './pages/ResetPasswordPage';
 import ProfilePage from './pages/ProfilePage';
 import SkillSearchPage from './pages/SkillSearchPage';
 import RequestsPage from './pages/RequestsPage';
@@ -16,16 +18,31 @@ function App() {
     return cached ? JSON.parse(cached) : null;
   });
   const [page, setPage] = useState(token ? 'profile' : 'login');
+  const [resetToken, setResetToken] = useState('');
 
   useEffect(() => {
     setAuthToken(token || null);
   }, [token]);
 
+  useEffect(() => {
+    const path = window.location.pathname;
+    const prefix = '/reset-password/';
+
+    if (path.startsWith(prefix)) {
+      const tokenFromPath = path.slice(prefix.length);
+      if (tokenFromPath) {
+        setResetToken(tokenFromPath);
+        setPage('resetPassword');
+      }
+    }
+  }, []);
+
   const menu = useMemo(() => {
     if (!token) {
       return [
         { key: 'login', label: 'Login' },
-        { key: 'register', label: 'Register' }
+        { key: 'register', label: 'Register' },
+        { key: 'forgotPassword', label: 'Forgot Password' }
       ];
     }
 
@@ -86,8 +103,12 @@ function App() {
       </nav>
 
       <div className="content">
-        {page === 'login' && <LoginPage onLogin={handleLogin} />}
+        {page === 'login' && (
+          <LoginPage onLogin={handleLogin} onForgotPassword={() => setPage('forgotPassword')} />
+        )}
         {page === 'register' && <RegisterPage />}
+        {page === 'forgotPassword' && <ForgotPasswordPage />}
+        {page === 'resetPassword' && <ResetPasswordPage resetToken={resetToken} />}
         {token && page === 'profile' && <ProfilePage />}
         {token && page === 'search' && <SkillSearchPage />}
         {token && page === 'requests' && <RequestsPage />}

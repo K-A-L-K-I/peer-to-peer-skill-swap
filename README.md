@@ -40,6 +40,12 @@ A mini project with:
    JWT_EXPIRES_IN=7d
    PORT=5000
    CLIENT_URL=http://localhost:3000
+   SMTP_HOST=smtp-relay.brevo.com
+   SMTP_PORT=587
+   SMTP_SECURE=false
+   SMTP_USER=your_smtp_username
+   SMTP_PASS=your_smtp_password_or_api_key
+   EMAIL_FROM=your_verified_sender@example.com
    ```
 4. Start backend:
    ```bash
@@ -72,6 +78,8 @@ A mini project with:
 ### Auth
 - `POST /auth/register`
 - `POST /auth/login`
+- `POST /auth/forgot-password`
+- `PUT /auth/reset-password/:token`
 - `GET /auth/profile` (protected)
 - `PUT /auth/profile` (protected)
 
@@ -109,6 +117,8 @@ A mini project with:
 ## Frontend Pages
 - Login
 - Register
+- Forgot Password
+- Reset Password (from email link)
 - Profile
 - Skill Search
 - Requests
@@ -120,3 +130,18 @@ A mini project with:
 - Protected routes require header:
   - `Authorization: Bearer <token>`
 - To test admin APIs, set a user role to `admin` in DB.
+- Forgot/reset emails use SMTP config.
+- Brevo example:
+  - `SMTP_HOST=smtp-relay.brevo.com`
+  - `SMTP_PORT=587`
+  - `SMTP_SECURE=false`
+  - `SMTP_USER=<brevo smtp login>`
+  - `SMTP_PASS=<brevo smtp key>`
+  - `EMAIL_FROM=<verified sender in Brevo>`
+- SendGrid example:
+  - `SMTP_HOST=smtp.sendgrid.net`
+  - `SMTP_PORT=587`
+  - `SMTP_SECURE=false`
+  - `SMTP_USER=apikey`
+  - `SMTP_PASS=<sendgrid api key>`
+  - `EMAIL_FROM=<verified sender in SendGrid>`
