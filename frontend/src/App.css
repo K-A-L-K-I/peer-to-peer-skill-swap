@@ -129,6 +129,14 @@ button:disabled {
   margin: 0.4rem 0;
 }
 
+.text-button {
+  background: transparent;
+  border: none;
+  color: #2563eb;
+  padding: 0;
+  text-align: left;
+}
+
 @media (max-width: 640px) {
   .topbar {
     flex-direction: column;

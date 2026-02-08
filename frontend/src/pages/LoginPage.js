@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import api from '../services/api';
 
-function LoginPage({ onLogin }) {
+function LoginPage({ onLogin, onForgotPassword = () => {} }) {
   const [form, setForm] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -49,6 +49,9 @@ function LoginPage({ onLogin }) {
           {loading ? 'Logging in...' : 'Login'}
         </button>
       </form>
+      <button type="button" className="text-button" onClick={onForgotPassword}>
+        Forgot password?
+      </button>
       {error && <p className="error-text">{error}</p>}
     </section>
   );
