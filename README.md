@@ -40,12 +40,13 @@ A mini project with:
    JWT_EXPIRES_IN=7d
    PORT=5000
    CLIENT_URL=http://localhost:3000
-   SMTP_HOST=smtp-relay.brevo.com
+   SMTP_HOST=smtp.gmail.com
    SMTP_PORT=587
    SMTP_SECURE=false
-   SMTP_USER=your_smtp_username
-   SMTP_PASS=your_smtp_password_or_api_key
-   EMAIL_FROM=your_verified_sender@example.com
+   SMTP_USER=your-gmail@gmail.com
+   SMTP_PASS=your-16-digit-app-password
+   EMAIL_FROM=your-gmail@gmail.com
+   EMAIL_MODE=smtp
    ```
 4. Start backend:
    ```bash
