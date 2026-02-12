@@ -37,27 +37,39 @@ function App() {
     }
   }, []);
 
-  const menu = useMemo(() => {
+  // Listen for profile updates from ProfilePage
+  useEffect(() => {
+    const handleUserUpdate = () => {
+      const cached = localStorage.getItem('user');
+      if (cached) {
+        setUser(JSON.parse(cached));
+      }
+    };
+    
+    window.addEventListener('userUpdated', handleUserUpdate);
+    return () => window.removeEventListener('userUpdated', handleUserUpdate);
+  }, []);
+
+  const navItems = useMemo(() => {
     if (!token) {
       return [
-        { key: 'login', label: 'Login' },
-        { key: 'register', label: 'Register' },
-        { key: 'forgotPassword', label: 'Forgot Password' }
+        { key: 'login', label: 'Sign In', icon: '→' },
+        { key: 'register', label: 'Create Account', icon: '+' }
       ];
     }
 
-    const list = [
-      { key: 'profile', label: 'Profile' },
-      { key: 'search', label: 'Skill Search' },
-      { key: 'requests', label: 'Requests' },
-      { key: 'chat', label: 'Chat' }
+    const items = [
+      { key: 'profile', label: 'My Profile', icon: '👤' },
+      { key: 'search', label: 'Find Skills', icon: '🔍' },
+      { key: 'requests', label: 'Swap Requests', icon: '⇄' },
+      { key: 'chat', label: 'Messages', icon: '💬' }
     ];
 
     if (user?.role === 'admin') {
-      list.push({ key: 'admin', label: 'Admin Dashboard' });
+      items.push({ key: 'admin', label: 'Admin', icon: '⚙' });
     }
 
-    return list;
+    return items;
   }, [token, user]);
 
   const handleLogin = (newToken, newUser) => {
@@ -77,45 +89,104 @@ function App() {
     setPage('login');
   };
 
+  const getUserInitials = (name) => {
+    if (!name) return '?';
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  };
+
+  const isAuthPage = ['login', 'register', 'forgotPassword', 'resetPassword'].includes(page);
+
   return (
-    <main className="app-shell">
-      <header className="topbar">
-        <h1>Skill Swap Frontend</h1>
-        {token && (
-          <div className="user-area">
-            <span>{user?.name || user?.email}</span>
-            <button type="button" onClick={handleLogout}>Logout</button>
+    <div className="app-shell">
+      <header className="app-header">
+        <div className="header-content">
+          <div className="brand">
+            <div className="brand-icon">S</div>
+            <h1>Skill Swap</h1>
           </div>
-        )}
+          
+          {token && user && (
+            <div className="user-nav">
+              <div className="user-info">
+                {user.profilePicture ? (
+                  <img 
+                    src={user.profilePicture} 
+                    alt={user.name}
+                    style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      objectFit: 'cover',
+                      border: '2px solid var(--border)'
+                    }}
+                  />
+                ) : (
+                  <div className="user-avatar">{getUserInitials(user.name)}</div>
+                )}
+                <span>{user.name}</span>
+              </div>
+              <button 
+                type="button" 
+                className="btn btn-ghost btn-sm"
+                onClick={handleLogout}
+              >
+                Sign Out
+              </button>
+            </div>
+          )}
+        </div>
       </header>
 
-      <nav className="tabs">
-        {menu.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            className={page === item.key ? 'tab active' : 'tab'}
-            onClick={() => setPage(item.key)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </nav>
+      {token && !isAuthPage && (
+        <nav className="app-nav">
+          <div className="nav-content">
+            <ul className="nav-list">
+              {navItems.map((item) => (
+                <li key={item.key} className="nav-item">
+                  <button
+                    type="button"
+                    className={`nav-link ${page === item.key ? 'active' : ''}`}
+                    onClick={() => setPage(item.key)}
+                  >
+                    <span>{item.icon}</span>
+                    {item.label}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </nav>
+      )}
 
-      <div className="content">
-        {page === 'login' && (
-          <LoginPage onLogin={handleLogin} onForgotPassword={() => setPage('forgotPassword')} />
-        )}
-        {page === 'register' && <RegisterPage />}
-        {page === 'forgotPassword' && <ForgotPasswordPage />}
-        {page === 'resetPassword' && <ResetPasswordPage resetToken={resetToken} />}
-        {token && page === 'profile' && <ProfilePage />}
-        {token && page === 'search' && <SkillSearchPage />}
-        {token && page === 'requests' && <RequestsPage />}
-        {token && page === 'chat' && <ChatPage />}
-        {token && page === 'admin' && user?.role === 'admin' && <AdminDashboardPage />}
-      </div>
-    </main>
+      <main className="app-main">
+        <div className="page-container">
+          {page === 'login' && (
+            <LoginPage 
+              onLogin={handleLogin} 
+              onNavigate={setPage}
+            />
+          )}
+          {page === 'register' && (
+            <RegisterPage 
+              onNavigate={setPage}
+            />
+          )}
+          {page === 'forgotPassword' && (
+            <ForgotPasswordPage 
+              onNavigate={setPage}
+            />
+          )}
+          {page === 'resetPassword' && (
+            <ResetPasswordPage resetToken={resetToken} />
+          )}
+          {token && page === 'profile' && <ProfilePage user={user} />}
+          {token && page === 'search' && <SkillSearchPage />}
+          {token && page === 'requests' && <RequestsPage />}
+          {token && page === 'chat' && <ChatPage />}
+          {token && page === 'admin' && user?.role === 'admin' && <AdminDashboardPage />}
+        </div>
+      </main>
+    </div>
   );
 }
 
