@@ -4,6 +4,8 @@ const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const sendEmail = require('../utils/sendEmail');
 
+const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB limit for base64
+
 const generateToken = (id) => {
   const jwtSecret = process.env.JWT_SECRET;
 
@@ -22,12 +24,17 @@ const registerUser = async (req, res) => {
       return res.status(500).json({ message: 'JWT_SECRET is not configured' });
     }
 
-    const { name, email, password, skillsOffered, skillsWanted } = req.body;
+    const { name, email, password, skillsOffered, skillsWanted, profilePicture } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({
         message: 'Name, email, and password are required'
       });
+    }
+
+    // Validate profile picture size if provided
+    if (profilePicture && profilePicture.length > MAX_FILE_SIZE * 1.4) {
+      return res.status(400).json({ message: 'Profile picture too large. Max 2MB.' });
     }
 
     const existingUser = await User.findOne({ email: email.toLowerCase() });
@@ -40,6 +47,7 @@ const registerUser = async (req, res) => {
       name,
       email,
       password,
+      profilePicture: profilePicture || null,
       skillsOffered: Array.isArray(skillsOffered) ? skillsOffered : [],
       skillsWanted: Array.isArray(skillsWanted) ? skillsWanted : []
     });
@@ -55,6 +63,7 @@ const registerUser = async (req, res) => {
         email: user.email,
         role: user.role,
         isBlocked: user.isBlocked,
+        profilePicture: user.profilePicture,
         skillsOffered: user.skillsOffered,
         skillsWanted: user.skillsWanted
       }
@@ -116,6 +125,7 @@ const loginUser = async (req, res) => {
         email: user.email,
         role: user.role,
         isBlocked: user.isBlocked,
+        profilePicture: user.profilePicture,
         skillsOffered: user.skillsOffered,
         skillsWanted: user.skillsWanted
       }
@@ -125,9 +135,6 @@ const loginUser = async (req, res) => {
     return res.status(500).json({ message: error.message || 'Server error' });
   }
 };
-
-
-
 
 const forgotPassword = async (req, res) => {
   try {
@@ -145,27 +152,18 @@ const forgotPassword = async (req, res) => {
       });
     }
 
-    // Generate raw reset token (32 bytes = 64 hex characters)
     const resetToken = crypto.randomBytes(32).toString('hex');
-    
-    // Hash token for storage (SHA256 produces 64 hex chars)
     const resetTokenHashed = crypto
       .createHash('sha256')
       .update(resetToken)
       .digest('hex');
 
-    console.log('Generated reset token (raw):', resetToken);
-    console.log('Hashed token (stored in DB):', resetTokenHashed);
-
     user.resetPasswordToken = resetTokenHashed;
-    user.resetPasswordExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
+    user.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
     await user.save({ validateBeforeSave: false });
 
-    // Create reset URL with RAW token (not hashed)
     const clientURL = process.env.CLIENT_URL || 'http://localhost:3000';
     const resetURL = `${clientURL}/reset-password/${resetToken}`;
-
-    console.log('Reset URL sent to user:', resetURL);
 
     const message = `Hello ${user.name},
 
@@ -236,10 +234,7 @@ Skill Swap Team`;
 const resetPassword = async (req, res) => {
   try {
     const { password } = req.body;
-    const { token } = req.params; // This is the raw token from URL
-
-    console.log('Received raw token from URL:', token);
-    console.log('Token length:', token?.length);
+    const { token } = req.params;
 
     if (!password) {
       return res.status(400).json({ message: 'New password is required' });
@@ -249,35 +244,24 @@ const resetPassword = async (req, res) => {
       return res.status(400).json({ message: 'Invalid reset token format' });
     }
 
-    // Hash the received token to match DB storage
     const tokenHashed = crypto
       .createHash('sha256')
       .update(token)
       .digest('hex');
-
-    console.log('Hashed token for DB lookup:', tokenHashed);
 
     const user = await User.findOne({
       resetPasswordToken: tokenHashed,
       resetPasswordExpire: { $gt: Date.now() }
     });
 
-    console.log('User found:', user ? 'Yes' : 'No');
-    console.log('Current time:', new Date().toISOString());
-    
     if (!user) {
       return res.status(400).json({ message: 'Invalid or expired reset token' });
     }
 
-    console.log('Token expires at:', new Date(user.resetPasswordExpire).toISOString());
-
-    // Set new password (will be hashed by pre-save hook)
     user.password = password;
     user.resetPasswordToken = null;
     user.resetPasswordExpire = null;
     await user.save();
-
-    console.log('Password reset successful for user:', user.email);
 
     return res.status(200).json({ 
       message: 'Password reset successful. You can now login with your new password.' 
@@ -300,7 +284,7 @@ const getUserProfile = async (req, res) => {
 
 const updateUserProfile = async (req, res) => {
   try {
-    const { name, email, password, skillsOffered, skillsWanted } = req.body;
+    const { name, email, password, skillsOffered, skillsWanted, profilePicture } = req.body;
 
     const user = await User.findById(req.user._id);
 
@@ -315,6 +299,11 @@ const updateUserProfile = async (req, res) => {
       }
     }
 
+    // Validate profile picture size if provided
+    if (profilePicture && profilePicture.length > MAX_FILE_SIZE * 1.4) {
+      return res.status(400).json({ message: 'Profile picture too large. Max 2MB.' });
+    }
+
     user.name = name || user.name;
     user.email = email ? email.toLowerCase() : user.email;
     user.skillsOffered = Array.isArray(skillsOffered)
@@ -323,6 +312,11 @@ const updateUserProfile = async (req, res) => {
     user.skillsWanted = Array.isArray(skillsWanted)
       ? skillsWanted
       : user.skillsWanted;
+
+    // Handle profile picture - can be null (remove), undefined (keep), or string (update)
+    if (profilePicture !== undefined) {
+      user.profilePicture = profilePicture;
+    }
 
     if (password) {
       user.password = password;
@@ -338,11 +332,13 @@ const updateUserProfile = async (req, res) => {
         email: updatedUser.email,
         role: updatedUser.role,
         isBlocked: updatedUser.isBlocked,
+        profilePicture: updatedUser.profilePicture,
         skillsOffered: updatedUser.skillsOffered,
         skillsWanted: updatedUser.skillsWanted
       }
     });
   } catch (error) {
+    console.error('Update profile error:', error);
     return res.status(500).json({ message: error.message || 'Server error' });
   }
 };
