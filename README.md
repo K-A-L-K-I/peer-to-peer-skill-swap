@@ -81,6 +81,9 @@ cd frontend
 npm install
 ```
 
+**Configure HTTPS Certificates (Mandatory for Video Calling):**
+Because the Video Call system utilizes WebRTC to stream camera data, the application MUST run in a Secure Context (HTTPS mode), or standard browsers will automatically block it. See the [**SSL Local Setup Guide**](SSL_SETUP.md) for instructions on generating the required `cert.pem` and `key.pem` files using `mkcert`.
+
 **Configure `.env` (Optional but recommended):**
 Create a `.env` file in the `frontend/` directory:
 ```env
