@@ -31,9 +31,11 @@ const getAcceptedSwapRequestForUser = async (swapRequestId, userId) => {
   return { swapRequest };
 };
 
+
+
 const sendMessage = async (req, res) => {
   try {
-    const { swapRequestId, content } = req.body;
+    const { swapRequestId, content, tempId } = req.body; // Extract tempId
 
     if (!swapRequestId || !content || !content.trim()) {
       return res.status(400).json({
@@ -74,6 +76,15 @@ const sendMessage = async (req, res) => {
       relatedId: message._id
     });
 
+    // Broadcast with tempId so sender can match it
+    const io = req.app.get('io');
+    if (io) {
+      io.to(`chat-${swapRequestId}`).emit('new-message', {
+        ...populatedMessage.toObject(),
+        tempId: tempId || null // Include tempId for sender to identify
+      });
+    }
+
     return res.status(201).json({
       message: 'Message sent successfully',
       data: populatedMessage
@@ -82,6 +93,16 @@ const sendMessage = async (req, res) => {
     return res.status(500).json({ message: error.message || 'Server error' });
   }
 };
+
+
+
+
+
+
+
+
+
+
 
 const getMessagesBySwapRequest = async (req, res) => {
   try {

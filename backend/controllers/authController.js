@@ -3,14 +3,15 @@ const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const sendEmail = require('../utils/sendEmail');
+const { isAuthorizedEmail, generateVerificationToken, hashToken } = require('../utils/verifyEmail');
+
+const MAX_FILE_SIZE = 2 * 1024 * 1024;
 
 const generateToken = (id) => {
   const jwtSecret = process.env.JWT_SECRET;
-
   if (!jwtSecret) {
     throw new Error('JWT_SECRET is not configured');
   }
-
   return jwt.sign({ id }, jwtSecret, {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d'
   });
@@ -22,12 +23,25 @@ const registerUser = async (req, res) => {
       return res.status(500).json({ message: 'JWT_SECRET is not configured' });
     }
 
-    const { name, email, password, skillsOffered, skillsWanted } = req.body;
+    const { name, email, password, skillsOffered, skillsWanted, profilePicture } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({
         message: 'Name, email, and password are required'
       });
+    }
+
+    // Validate email domain
+    const emailCheck = isAuthorizedEmail(email);
+    if (!emailCheck.valid) {
+      return res.status(400).json({ 
+        message: `Email not authorized: ${emailCheck.reason}` 
+      });
+    }
+
+    // Validate profile picture size
+    if (profilePicture && profilePicture.length > MAX_FILE_SIZE * 1.4) {
+      return res.status(400).json({ message: 'Profile picture too large. Max 2MB.' });
     }
 
     const existingUser = await User.findOne({ email: email.toLowerCase() });
@@ -36,29 +50,94 @@ const registerUser = async (req, res) => {
       return res.status(400).json({ message: 'User already exists' });
     }
 
+    // Generate verification token
+    const verificationToken = generateVerificationToken();
+    const hashedToken = hashToken(verificationToken);
+
     const user = await User.create({
       name,
       email,
       password,
+      profilePicture: profilePicture || null,
       skillsOffered: Array.isArray(skillsOffered) ? skillsOffered : [],
-      skillsWanted: Array.isArray(skillsWanted) ? skillsWanted : []
+      skillsWanted: Array.isArray(skillsWanted) ? skillsWanted : [],
+      isEmailVerified: false,
+      emailVerificationToken: hashedToken,
+      emailVerificationExpire: Date.now() + 24 * 60 * 60 * 1000 // 24 hours
     });
 
-    const token = generateToken(user._id);
+    // Send verification email
+    const clientURL = process.env.CLIENT_URL || 'http://localhost:3000';
+    const verifyURL = `${clientURL}/verify-email/${verificationToken}`;
 
-    return res.status(201).json({
-      message: 'User registered successfully',
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        isBlocked: user.isBlocked,
-        skillsOffered: user.skillsOffered,
-        skillsWanted: user.skillsWanted
-      }
-    });
+    const message = `Hello ${name},
+
+Welcome to Skill Swap! Please verify your email address to complete registration.
+
+Click the link below to verify:
+${verifyURL}
+
+This link will expire in 24 hours.
+
+If you didn't create this account, please ignore this email.
+
+Best regards,
+Skill Swap Team`;
+
+    const htmlMessage = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #2563eb;">Welcome to Skill Swap!</h2>
+        <p>Hello <strong>${name}</strong>,</p>
+        <p>Please verify your email address to complete your registration.</p>
+        <a href="${verifyURL}" 
+           style="display: inline-block; background: #2563eb; color: white; 
+                  padding: 14px 28px; text-decoration: none; border-radius: 8px; 
+                  margin: 16px 0; font-weight: 600;">
+          Verify Email Address
+        </a>
+        <p>Or copy and paste this link:</p>
+        <p style="word-break: break-all; color: #2563eb;">${verifyURL}</p>
+        <p style="color: #6b7280; font-size: 0.9em;">
+          This link will expire in 24 hours.<br>
+          If you didn't create this account, please ignore this email.
+        </p>
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
+        <p style="color: #6b7280; font-size: 0.8em;">
+          Skill Swap Team
+        </p>
+      </div>
+    `;
+
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: 'Skill Swap - Verify Your Email',
+        text: message,
+        html: htmlMessage
+      });
+
+      return res.status(201).json({
+        message: 'Registration successful! Please check your email to verify your account.',
+        user: {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          isEmailVerified: false
+        }
+      });
+    } catch (emailError) {
+      // If email fails, still create user but mark for retry
+      console.error('Verification email failed:', emailError);
+      return res.status(201).json({
+        message: 'Account created but verification email failed. Please request a new verification email.',
+        user: {
+          _id: user._id,
+          name: user.name,
+          email: user.email,
+          isEmailVerified: false
+        }
+      });
+    }
   } catch (error) {
     console.error('Register error:', error);
 
@@ -71,6 +150,121 @@ const registerUser = async (req, res) => {
       return res.status(400).json({ message: firstError?.message || 'Invalid input' });
     }
 
+    return res.status(500).json({ message: error.message || 'Server error' });
+  }
+};
+
+const verifyEmail = async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    if (!token || token.length !== 64) {
+      return res.status(400).json({ message: 'Invalid verification token' });
+    }
+
+    const hashedToken = hashToken(token);
+
+    const user = await User.findOne({
+      emailVerificationToken: hashedToken,
+      emailVerificationExpire: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ 
+        message: 'Invalid or expired verification token. Please request a new one.' 
+      });
+    }
+
+    // Mark as verified
+    user.isEmailVerified = true;
+    user.emailVerificationToken = null;
+    user.emailVerificationExpire = null;
+    await user.save();
+
+    return res.status(200).json({
+      message: 'Email verified successfully! You can now log in.',
+      user: {
+        _id: user._id,
+        email: user.email,
+        isEmailVerified: true
+      }
+    });
+  } catch (error) {
+    console.error('Email verification error:', error);
+    return res.status(500).json({ message: error.message || 'Server error' });
+  }
+};
+
+const resendVerificationEmail = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    const user = await User.findOne({ email: email.toLowerCase() });
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (user.isEmailVerified) {
+      return res.status(400).json({ message: 'Email is already verified' });
+    }
+
+    // Generate new token
+    const verificationToken = generateVerificationToken();
+    const hashedToken = hashToken(verificationToken);
+
+    user.emailVerificationToken = hashedToken;
+    user.emailVerificationExpire = Date.now() + 24 * 60 * 60 * 1000;
+    await user.save();
+
+    // Send email
+    const clientURL = process.env.CLIENT_URL || 'http://localhost:3000';
+    const verifyURL = `${clientURL}/verify-email/${verificationToken}`;
+
+    const message = `Hello ${user.name},
+
+Please verify your email address for Skill Swap.
+
+Click the link below:
+${verifyURL}
+
+This link will expire in 24 hours.
+
+Best regards,
+Skill Swap Team`;
+
+    const htmlMessage = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2 style="color: #2563eb;">Verify Your Email</h2>
+        <p>Hello <strong>${user.name}</strong>,</p>
+        <a href="${verifyURL}" 
+           style="display: inline-block; background: #2563eb; color: white; 
+                  padding: 14px 28px; text-decoration: none; border-radius: 8px; 
+                  margin: 16px 0; font-weight: 600;">
+          Verify Email Address
+        </a>
+        <p style="color: #6b7280; font-size: 0.9em;">
+          This link will expire in 24 hours.
+        </p>
+      </div>
+    `;
+
+    await sendEmail({
+      to: user.email,
+      subject: 'Skill Swap - Verify Your Email',
+      text: message,
+      html: htmlMessage
+    });
+
+    return res.status(200).json({
+      message: 'Verification email sent. Please check your inbox.'
+    });
+  } catch (error) {
+    console.error('Resend verification error:', error);
     return res.status(500).json({ message: error.message || 'Server error' });
   }
 };
@@ -99,6 +293,27 @@ const loginUser = async (req, res) => {
       return res.status(403).json({ message: 'Account is blocked' });
     }
 
+    // Check if email is verified
+    if (!user.isEmailVerified) {
+      const isLegacyUser = user.emailVerificationToken || user.emailVerificationExpire;
+      
+      if (isLegacyUser) {
+        return res.status(403).json({ 
+          message: 'Please verify your email before logging in. Check your inbox or request a new verification email.',
+          needsVerification: true,
+          verificationType: 'legacy',
+          email: user.email
+        });
+      } else {
+        return res.status(403).json({ 
+          message: 'Account verification incomplete. Please contact support.',
+          needsVerification: true,
+          verificationType: 'unknown',
+          email: user.email
+        });
+      }
+    }
+
     const isPasswordMatched = await bcrypt.compare(password, user.password);
 
     if (!isPasswordMatched) {
@@ -111,11 +326,13 @@ const loginUser = async (req, res) => {
       message: 'Login successful',
       token,
       user: {
-        id: user._id,
+        _id: user._id,
         name: user.name,
         email: user.email,
         role: user.role,
         isBlocked: user.isBlocked,
+        isEmailVerified: user.isEmailVerified,
+        profilePicture: user.profilePicture,
         skillsOffered: user.skillsOffered,
         skillsWanted: user.skillsWanted
       }
@@ -125,9 +342,6 @@ const loginUser = async (req, res) => {
     return res.status(500).json({ message: error.message || 'Server error' });
   }
 };
-
-
-
 
 const forgotPassword = async (req, res) => {
   try {
@@ -140,32 +354,20 @@ const forgotPassword = async (req, res) => {
     const user = await User.findOne({ email: email.toLowerCase() });
 
     if (!user) {
-      return res.status(200).json({
-        message: 'If this email is registered, a reset link has been sent'
-      });
+      return res.status(404).json({ message: 'User not found' });
     }
 
-    // Generate raw reset token (32 bytes = 64 hex characters)
-    const resetToken = crypto.randomBytes(32).toString('hex');
-    
-    // Hash token for storage (SHA256 produces 64 hex chars)
-    const resetTokenHashed = crypto
-      .createHash('sha256')
-      .update(resetToken)
-      .digest('hex');
+    // Generate reset token
+    const resetToken = generateVerificationToken();
+    const hashedToken = hashToken(resetToken);
 
-    console.log('Generated reset token (raw):', resetToken);
-    console.log('Hashed token (stored in DB):', resetTokenHashed);
+    user.resetPasswordToken = hashedToken;
+    user.resetPasswordExpire = Date.now() + 60 * 60 * 1000; // 1 hour
+    await user.save();
 
-    user.resetPasswordToken = resetTokenHashed;
-    user.resetPasswordExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
-    await user.save({ validateBeforeSave: false });
-
-    // Create reset URL with RAW token (not hashed)
+    // Send reset email
     const clientURL = process.env.CLIENT_URL || 'http://localhost:3000';
     const resetURL = `${clientURL}/reset-password/${resetToken}`;
-
-    console.log('Reset URL sent to user:', resetURL);
 
     const message = `Hello ${user.name},
 
@@ -174,7 +376,7 @@ You requested a password reset for your Skill Swap account.
 Click the link below to reset your password:
 ${resetURL}
 
-This link will expire in 10 minutes.
+This link will expire in 1 hour.
 
 If you didn't request this, please ignore this email.
 
@@ -183,50 +385,34 @@ Skill Swap Team`;
 
     const htmlMessage = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h2 style="color: #111827;">Password Reset Request</h2>
+        <h2 style="color: #2563eb;">Password Reset Request</h2>
         <p>Hello <strong>${user.name}</strong>,</p>
         <p>You requested a password reset for your Skill Swap account.</p>
-        <p>Click the button below to reset your password:</p>
         <a href="${resetURL}" 
-           style="display: inline-block; background: #111827; color: white; 
-                  padding: 12px 24px; text-decoration: none; border-radius: 8px; 
-                  margin: 16px 0;">
+           style="display: inline-block; background: #2563eb; color: white; 
+                  padding: 14px 28px; text-decoration: none; border-radius: 8px; 
+                  margin: 16px 0; font-weight: 600;">
           Reset Password
         </a>
         <p>Or copy and paste this link:</p>
         <p style="word-break: break-all; color: #2563eb;">${resetURL}</p>
         <p style="color: #6b7280; font-size: 0.9em;">
-          This link will expire in 10 minutes.<br>
+          This link will expire in 1 hour.<br>
           If you didn't request this, please ignore this email.
-        </p>
-        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;">
-        <p style="color: #6b7280; font-size: 0.8em;">
-          Skill Swap Team
         </p>
       </div>
     `;
 
-    try {
-      await sendEmail({
-        to: user.email,
-        subject: 'Skill Swap - Password Reset Request',
-        text: message,
-        html: htmlMessage
-      });
+    await sendEmail({
+      to: user.email,
+      subject: 'Skill Swap - Password Reset',
+      text: message,
+      html: htmlMessage
+    });
 
-      return res.status(200).json({ 
-        message: 'Reset link sent to your email. Please check your inbox (and spam folder).' 
-      });
-    } catch (emailError) {
-      user.resetPasswordToken = null;
-      user.resetPasswordExpire = null;
-      await user.save({ validateBeforeSave: false });
-      
-      console.error('Email send error:', emailError);
-      return res.status(500).json({ 
-        message: 'Failed to send email. Please try again later.' 
-      });
-    }
+    return res.status(200).json({
+      message: 'Password reset link sent to your email'
+    });
   } catch (error) {
     console.error('Forgot password error:', error);
     return res.status(500).json({ message: error.message || 'Server error' });
@@ -235,52 +421,38 @@ Skill Swap Team`;
 
 const resetPassword = async (req, res) => {
   try {
+    const { token } = req.params;
     const { password } = req.body;
-    const { token } = req.params; // This is the raw token from URL
-
-    console.log('Received raw token from URL:', token);
-    console.log('Token length:', token?.length);
-
-    if (!password) {
-      return res.status(400).json({ message: 'New password is required' });
-    }
 
     if (!token || token.length !== 64) {
-      return res.status(400).json({ message: 'Invalid reset token format' });
+      return res.status(400).json({ message: 'Invalid reset token' });
     }
 
-    // Hash the received token to match DB storage
-    const tokenHashed = crypto
-      .createHash('sha256')
-      .update(token)
-      .digest('hex');
+    if (!password || password.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
 
-    console.log('Hashed token for DB lookup:', tokenHashed);
+    const hashedToken = hashToken(token);
 
     const user = await User.findOne({
-      resetPasswordToken: tokenHashed,
+      resetPasswordToken: hashedToken,
       resetPasswordExpire: { $gt: Date.now() }
     });
 
-    console.log('User found:', user ? 'Yes' : 'No');
-    console.log('Current time:', new Date().toISOString());
-    
     if (!user) {
-      return res.status(400).json({ message: 'Invalid or expired reset token' });
+      return res.status(400).json({ 
+        message: 'Invalid or expired reset token. Please request a new one.' 
+      });
     }
 
-    console.log('Token expires at:', new Date(user.resetPasswordExpire).toISOString());
-
-    // Set new password (will be hashed by pre-save hook)
+    // Update password
     user.password = password;
     user.resetPasswordToken = null;
     user.resetPasswordExpire = null;
     await user.save();
 
-    console.log('Password reset successful for user:', user.email);
-
-    return res.status(200).json({ 
-      message: 'Password reset successful. You can now login with your new password.' 
+    return res.status(200).json({
+      message: 'Password reset successful! You can now log in with your new password.'
     });
   } catch (error) {
     console.error('Reset password error:', error);
@@ -300,7 +472,7 @@ const getUserProfile = async (req, res) => {
 
 const updateUserProfile = async (req, res) => {
   try {
-    const { name, email, password, skillsOffered, skillsWanted } = req.body;
+    const { name, email, password, skillsOffered, skillsWanted, profilePicture } = req.body;
 
     const user = await User.findById(req.user._id);
 
@@ -308,21 +480,37 @@ const updateUserProfile = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
+    // If changing email, verify new email is authorized
     if (email && email.toLowerCase() !== user.email) {
+      const emailCheck = isAuthorizedEmail(email);
+      if (!emailCheck.valid) {
+        return res.status(400).json({ 
+          message: `Email not authorized: ${emailCheck.reason}` 
+        });
+      }
+      
       const existingEmail = await User.findOne({ email: email.toLowerCase() });
       if (existingEmail) {
         return res.status(400).json({ message: 'Email already in use' });
       }
+      
+      // Reset verification for new email
+      user.isEmailVerified = false;
+    }
+
+    // Validate profile picture size
+    if (profilePicture && profilePicture.length > MAX_FILE_SIZE * 1.4) {
+      return res.status(400).json({ message: 'Profile picture too large. Max 2MB.' });
     }
 
     user.name = name || user.name;
     user.email = email ? email.toLowerCase() : user.email;
-    user.skillsOffered = Array.isArray(skillsOffered)
-      ? skillsOffered
-      : user.skillsOffered;
-    user.skillsWanted = Array.isArray(skillsWanted)
-      ? skillsWanted
-      : user.skillsWanted;
+    user.skillsOffered = Array.isArray(skillsOffered) ? skillsOffered : user.skillsOffered;
+    user.skillsWanted = Array.isArray(skillsWanted) ? skillsWanted : user.skillsWanted;
+
+    if (profilePicture !== undefined) {
+      user.profilePicture = profilePicture;
+    }
 
     if (password) {
       user.password = password;
@@ -333,22 +521,27 @@ const updateUserProfile = async (req, res) => {
     return res.status(200).json({
       message: 'Profile updated successfully',
       user: {
-        id: updatedUser._id,
+        _id: updatedUser._id,
         name: updatedUser.name,
         email: updatedUser.email,
         role: updatedUser.role,
         isBlocked: updatedUser.isBlocked,
+        isEmailVerified: updatedUser.isEmailVerified,
+        profilePicture: updatedUser.profilePicture,
         skillsOffered: updatedUser.skillsOffered,
         skillsWanted: updatedUser.skillsWanted
       }
     });
   } catch (error) {
+    console.error('Update profile error:', error);
     return res.status(500).json({ message: error.message || 'Server error' });
   }
 };
 
 module.exports = {
   registerUser,
+  verifyEmail,
+  resendVerificationEmail,
   loginUser,
   forgotPassword,
   resetPassword,

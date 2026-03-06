@@ -20,6 +20,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: [true, 'Password is required']
     },
+    profilePicture: {
+      type: String,
+      default: null
+    },
     skillsOffered: {
       type: [String],
       default: []
@@ -36,6 +40,19 @@ const userSchema = new mongoose.Schema(
     isBlocked: {
       type: Boolean,
       default: false
+    },
+    // Email verification fields
+    isEmailVerified: {
+      type: Boolean,
+      default: false
+    },
+    emailVerificationToken: {
+      type: String,
+      default: null
+    },
+    emailVerificationExpire: {
+      type: Date,
+      default: null
     },
     resetPasswordToken: {
       type: String,

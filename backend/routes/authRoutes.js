@@ -1,6 +1,8 @@
 const express = require('express');
 const {
   registerUser,
+  verifyEmail,
+  resendVerificationEmail,
   loginUser,
   forgotPassword,
   resetPassword,
@@ -12,6 +14,8 @@ const { protect } = require('../middleware/authMiddleware');
 const router = express.Router();
 
 router.post('/register', registerUser);
+router.get('/verify-email/:token', verifyEmail);
+router.post('/resend-verification', resendVerificationEmail);
 router.post('/login', loginUser);
 router.post('/forgot-password', forgotPassword);
 router.put('/reset-password/:token', resetPassword);

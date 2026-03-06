@@ -1,0 +1,224 @@
+.nav-modern {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--header-height);
+  background: white;
+  border-bottom: 1px solid var(--gray-200);
+  z-index: 100;
+  box-shadow: var(--shadow-sm);
+}
+
+.nav-container {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-6);
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.nav-logo {
+  height: 52px;
+  width: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  overflow: hidden;
+}
+
+.nav-logo-image {
+  height: 100%;
+  width: 100%;
+  object-fit: contain;
+  object-position: left center;
+  transform: scale(1.6);
+  transform-origin: left center;
+}
+
+/* LEFT-ALIGNED NAVIGATION - BIGGER BUTTONS */
+.nav-desktop {
+  display: none;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+  margin-left: var(--space-12);
+}
+
+@media (min-width: 768px) {
+  .nav-desktop {
+    display: flex;
+  }
+}
+
+.nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 14px 28px;
+  border-radius: var(--radius-lg);
+  color: var(--text-secondary);
+  font-weight: 600;
+  font-size: 16px;
+  transition: all var(--transition-fast);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.nav-item:hover {
+  color: var(--text-primary);
+  background: var(--gray-100);
+}
+
+.nav-item-active {
+  color: var(--primary-600);
+  background: var(--primary-50);
+}
+
+/* Remove the dot indicator */
+.nav-indicator {
+  display: none;
+}
+
+.nav-user {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-shrink: 0;
+}
+
+.nav-user-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.nav-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-full);
+  object-fit: cover;
+  border: 2px solid var(--gray-200);
+}
+
+.nav-avatar-placeholder {
+  background: linear-gradient(135deg, var(--primary-500), var(--primary-700));
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: var(--text-base);
+  border: none;
+}
+
+.nav-user-name {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 16px;
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .nav-user-name {
+    display: block;
+  }
+}
+
+/* BETTER LOGOUT BUTTON */
+.nav-logout {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-lg);
+  border: 2px solid var(--gray-200);
+  background: white;
+  color: var(--gray-500);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.nav-logout:hover {
+  border-color: var(--error-500);
+  background: var(--error-50);
+  color: var(--error-600);
+}
+
+.nav-logout svg {
+  width: 22px;
+  height: 22px;
+  stroke-width: 2;
+}
+
+.nav-mobile-toggle {
+  display: flex;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-lg);
+  border: none;
+  background: var(--gray-100);
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+@media (min-width: 768px) {
+  .nav-mobile-toggle {
+    display: none;
+  }
+}
+
+.nav-mobile-menu {
+  position: absolute;
+  top: var(--header-height);
+  left: 0;
+  right: 0;
+  background: white;
+  border-bottom: 1px solid var(--gray-200);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-lg);
+}
+
+.nav-mobile-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 16px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  margin-bottom: var(--space-2);
+}
+
+.nav-mobile-item-active {
+  color: var(--primary-600);
+  background: var(--primary-50);
+}
+
+.nav-mobile-logout {
+  color: var(--error-600);
+  margin-top: var(--space-4);
+  border-top: 1px solid var(--gray-200);
+  padding-top: var(--space-4);
+}

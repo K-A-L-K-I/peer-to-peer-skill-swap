@@ -1,122 +1,152 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import './styles/design-system.css';
 import './App.css';
-import { setAuthToken } from './services/api';
+import { setAuthToken, initializeSocket, registerSocket } from './services/api';
+import useAuthStore from './store/authStore';
+
+import Navigation from './components/Navigation';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
+import VerifyEmailPage from './pages/VerifyEmailPage';
 import ProfilePage from './pages/ProfilePage';
 import SkillSearchPage from './pages/SkillSearchPage';
 import RequestsPage from './pages/RequestsPage';
 import ChatPage from './pages/ChatPage';
 import AdminDashboardPage from './pages/AdminDashboardPage';
 
-function App() {
-  const [token, setToken] = useState(localStorage.getItem('token') || '');
-  const [user, setUser] = useState(() => {
-    const cached = localStorage.getItem('user');
-    return cached ? JSON.parse(cached) : null;
-  });
-  const [page, setPage] = useState(token ? 'profile' : 'login');
-  const [resetToken, setResetToken] = useState('');
+// Protected Route Wrapper
+const ProtectedRoute = ({ children, requireAdmin = false }) => {
+  const { token, user } = useAuthStore();
 
+  if (!token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (requireAdmin && user?.role !== 'admin') {
+    return <Navigate to="/profile" replace />;
+  }
+
+  return children;
+};
+
+// Auth Route Wrapper (redirects away if already logged in)
+const AuthRoute = ({ children }) => {
+  const { token } = useAuthStore();
+
+  if (token) {
+    return <Navigate to="/profile" replace />;
+  }
+
+  return children;
+};
+
+
+function AppLayout({ children }) {
+  const { token, user, logout } = useAuthStore();
+
+  // Set auth token in API headers when token changes
   useEffect(() => {
     setAuthToken(token || null);
   }, [token]);
 
+  // Initialize socket when user logs in
   useEffect(() => {
-    const path = window.location.pathname;
-    const prefix = '/reset-password/';
+    if (token && user) {
+      const socket = initializeSocket(token);
 
-    if (path.startsWith(prefix)) {
-      const tokenFromPath = path.slice(prefix.length);
-      if (tokenFromPath) {
-        setResetToken(tokenFromPath);
-        setPage('resetPassword');
+      if (socket) {
+        const checkAndRegister = () => {
+          if (socket.connected) {
+            registerSocket(user._id, user.name);
+          } else {
+            setTimeout(checkAndRegister, 500);
+          }
+        };
+        setTimeout(checkAndRegister, 1000);
       }
     }
-  }, []);
-
-  const menu = useMemo(() => {
-    if (!token) {
-      return [
-        { key: 'login', label: 'Login' },
-        { key: 'register', label: 'Register' },
-        { key: 'forgotPassword', label: 'Forgot Password' }
-      ];
-    }
-
-    const list = [
-      { key: 'profile', label: 'Profile' },
-      { key: 'search', label: 'Skill Search' },
-      { key: 'requests', label: 'Requests' },
-      { key: 'chat', label: 'Chat' }
-    ];
-
-    if (user?.role === 'admin') {
-      list.push({ key: 'admin', label: 'Admin Dashboard' });
-    }
-
-    return list;
   }, [token, user]);
 
-  const handleLogin = (newToken, newUser) => {
-    localStorage.setItem('token', newToken);
-    localStorage.setItem('user', JSON.stringify(newUser));
-    setAuthToken(newToken);
-    setToken(newToken);
-    setUser(newUser);
-    setPage('profile');
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    setToken('');
-    setUser(null);
-    setPage('login');
-  };
-
   return (
-    <main className="app-shell">
-      <header className="topbar">
-        <h1>Skill Swap Frontend</h1>
-        {token && (
-          <div className="user-area">
-            <span>{user?.name || user?.email}</span>
-            <button type="button" onClick={handleLogout}>Logout</button>
-          </div>
-        )}
-      </header>
+    <div className="app-modern">
+      {token && <Navigation user={user} onLogout={logout} />}
 
-      <nav className="tabs">
-        {menu.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            className={page === item.key ? 'tab active' : 'tab'}
-            onClick={() => setPage(item.key)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </nav>
+      <main className={`main-content ${token ? 'main-with-nav' : ''}`}>
+        <div className="page-container animate-fade-in-up">
+          {children}
+        </div>
+      </main>
+    </div>
+  );
+}
 
-      <div className="content">
-        {page === 'login' && (
-          <LoginPage onLogin={handleLogin} onForgotPassword={() => setPage('forgotPassword')} />
-        )}
-        {page === 'register' && <RegisterPage />}
-        {page === 'forgotPassword' && <ForgotPasswordPage />}
-        {page === 'resetPassword' && <ResetPasswordPage resetToken={resetToken} />}
-        {token && page === 'profile' && <ProfilePage />}
-        {token && page === 'search' && <SkillSearchPage />}
-        {token && page === 'requests' && <RequestsPage />}
-        {token && page === 'chat' && <ChatPage />}
-        {token && page === 'admin' && user?.role === 'admin' && <AdminDashboardPage />}
-      </div>
-    </main>
+function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* Auth Routes */}
+        <Route path="/login" element={
+          <AuthRoute>
+            <AppLayout><LoginPage /></AppLayout>
+          </AuthRoute>
+        } />
+        <Route path="/register" element={
+          <AuthRoute>
+            <AppLayout><RegisterPage /></AppLayout>
+          </AuthRoute>
+        } />
+        <Route path="/forgot-password" element={
+          <AuthRoute>
+            <AppLayout><ForgotPasswordPage /></AppLayout>
+          </AuthRoute>
+        } />
+        <Route path="/reset-password/:token" element={
+          <AuthRoute>
+            <AppLayout><ResetPasswordPage /></AppLayout>
+          </AuthRoute>
+        } />
+        <Route path="/verify-email/:token" element={
+          <AuthRoute>
+            <AppLayout><VerifyEmailPage /></AppLayout>
+          </AuthRoute>
+        } />
+
+        {/* Protected Routes */}
+        <Route path="/profile" element={
+          <ProtectedRoute>
+            <AppLayout><ProfilePage /></AppLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/search" element={
+          <ProtectedRoute>
+            <AppLayout><SkillSearchPage /></AppLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/requests" element={
+          <ProtectedRoute>
+            <AppLayout><RequestsPage /></AppLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/chat" element={
+          <ProtectedRoute>
+            <AppLayout><ChatPage /></AppLayout>
+          </ProtectedRoute>
+        } />
+        <Route path="/admin" element={
+          <ProtectedRoute requireAdmin={true}>
+            <AppLayout><AdminDashboardPage /></AppLayout>
+          </ProtectedRoute>
+        } />
+
+        {/* Default / Fallback Route */}
+        <Route path="*" element={<Navigate to="/profile" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 
 export default App;
+

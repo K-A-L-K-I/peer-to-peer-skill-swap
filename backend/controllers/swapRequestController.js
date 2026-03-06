@@ -17,7 +17,6 @@ const sendSkillSwapRequest = async (req, res) => {
     }
 
     const receiver = await User.findById(toUser);
-
     if (!receiver) {
       return res.status(404).json({ message: 'Recipient user not found' });
     }
@@ -26,6 +25,24 @@ const sendSkillSwapRequest = async (req, res) => {
       return res.status(403).json({ message: 'Cannot send request to a blocked user' });
     }
 
+    // NEW: Validate skills match sender's profile (case-insensitive)
+    const sender = await User.findById(req.user._id);
+    const senderOffered = (sender.skillsOffered || []).map(s => s.toLowerCase());
+    const senderWanted = (sender.skillsWanted || []).map(s => s.toLowerCase());
+    
+    if (!senderOffered.includes(offeredSkill.toLowerCase())) {
+      return res.status(400).json({ 
+        message: `You can only offer skills from your profile: ${sender.skillsOffered.join(', ') || 'none'}`
+      });
+    }
+    
+    if (!senderWanted.includes(wantedSkill.toLowerCase())) {
+      return res.status(400).json({ 
+        message: `You can only request skills you want to learn: ${sender.skillsWanted.join(', ') || 'none'}`
+      });
+    }
+
+    // Check for duplicate pending request
     const existingPending = await SkillSwapRequest.findOne({
       fromUser: req.user._id,
       toUser,
@@ -70,63 +87,60 @@ const sendSkillSwapRequest = async (req, res) => {
   }
 };
 
+// Helper function - NOT a route handler
 const respondToSkillSwapRequest = async (req, res, newStatus) => {
-  const swapRequest = await SkillSwapRequest.findById(req.params.id);
+  try {
+    const swapRequest = await SkillSwapRequest.findById(req.params.id);
 
-  if (!swapRequest) {
-    return res.status(404).json({ message: 'Skill swap request not found' });
+    if (!swapRequest) {
+      return res.status(404).json({ message: 'Skill swap request not found' });
+    }
+
+    if (String(swapRequest.toUser) !== String(req.user._id)) {
+      return res
+        .status(403)
+        .json({ message: 'Only the recipient can respond to this request' });
+    }
+
+    if (swapRequest.status !== 'pending') {
+      return res
+        .status(400)
+        .json({ message: `Request already ${swapRequest.status}` });
+    }
+
+    swapRequest.status = newStatus;
+    swapRequest.respondedAt = new Date();
+
+    await swapRequest.save();
+
+    const populatedRequest = await SkillSwapRequest.findById(swapRequest._id)
+      .populate('fromUser', 'name email skillsOffered skillsWanted role isBlocked')
+      .populate('toUser', 'name email skillsOffered skillsWanted role isBlocked');
+
+    await Notification.create({
+      user: swapRequest.fromUser,
+      type: 'swap_request',
+      title: 'Skill Swap Request Updated',
+      body: `Your skill swap request was ${newStatus}`,
+      relatedModel: 'SkillSwapRequest',
+      relatedId: swapRequest._id
+    });
+
+    return res.status(200).json({
+      message: `Skill swap request ${newStatus}`,
+      request: populatedRequest
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message || 'Server error' });
   }
-
-  if (String(swapRequest.toUser) !== String(req.user._id)) {
-    return res
-      .status(403)
-      .json({ message: 'Only the recipient can respond to this request' });
-  }
-
-  if (swapRequest.status !== 'pending') {
-    return res
-      .status(400)
-      .json({ message: `Request already ${swapRequest.status}` });
-  }
-
-  swapRequest.status = newStatus;
-  swapRequest.respondedAt = new Date();
-
-  await swapRequest.save();
-
-  const populatedRequest = await SkillSwapRequest.findById(swapRequest._id)
-    .populate('fromUser', 'name email skillsOffered skillsWanted role isBlocked')
-    .populate('toUser', 'name email skillsOffered skillsWanted role isBlocked');
-
-  await Notification.create({
-    user: swapRequest.fromUser,
-    type: 'swap_request',
-    title: 'Skill Swap Request Updated',
-    body: `Your skill swap request was ${newStatus}`,
-    relatedModel: 'SkillSwapRequest',
-    relatedId: swapRequest._id
-  });
-
-  return res.status(200).json({
-    message: `Skill swap request ${newStatus}`,
-    request: populatedRequest
-  });
 };
 
 const acceptSkillSwapRequest = async (req, res) => {
-  try {
-    return respondToSkillSwapRequest(req, res, 'accepted');
-  } catch (error) {
-    return res.status(500).json({ message: error.message || 'Server error' });
-  }
+  return respondToSkillSwapRequest(req, res, 'accepted');
 };
 
 const rejectSkillSwapRequest = async (req, res) => {
-  try {
-    return respondToSkillSwapRequest(req, res, 'rejected');
-  } catch (error) {
-    return res.status(500).json({ message: error.message || 'Server error' });
-  }
+  return respondToSkillSwapRequest(req, res, 'rejected');
 };
 
 module.exports = {
