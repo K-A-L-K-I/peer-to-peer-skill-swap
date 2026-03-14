@@ -1,0 +1,71 @@
+/* Skeleton animations and base styles */
+.skeleton-box,
+.skeleton-circle,
+.skeleton-text-line {
+    background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite linear;
+}
+
+@keyframes shimmer {
+    0% {
+        background-position: 200% 0;
+    }
+
+    100% {
+        background-position: -200% 0;
+    }
+}
+
+/* Skeleton User Card (Search Page) */
+.skeleton-user-card {
+    background: white;
+    border-radius: 20px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    border: 1px solid #f3f4f6;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.skeleton-card-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.skeleton-header-info {
+    flex: 1;
+}
+
+.skeleton-text-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.skeleton-text-line {
+    height: 14px;
+    border-radius: 4px;
+}
+
+.skeleton-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    background: #f9fafb;
+    border-radius: 16px;
+    padding: 1.25rem;
+}
+
+.skeleton-tags {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+}
+
+.skeleton-tags-label {
+    margin-bottom: 0.25rem;
+}

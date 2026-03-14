@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import api from '../services/api';
+import { Mail } from 'lucide-react';
 
 function LoginPage() {
   const [form, setForm] = useState({ email: '', password: '' });
@@ -72,159 +73,224 @@ function LoginPage() {
   };
 
   return (
-    <div className="auth-page">
-      <div className="auth-background">
-        <div className="gradient-orb orb-1"></div>
-        <div className="gradient-orb orb-2"></div>
-        <div className="gradient-orb orb-3"></div>
-      </div>
-
-      <div className="auth-container">
-        <div className="auth-card glass">
-          <div className="auth-header">
-            <div className="logo-container">
-              <img src="/1000078980-removebg-preview.png" alt="SkillSwap Logo" style={{ width: '250px', height: 'auto', objectFit: 'contain' }} />
-            </div>
-            <h1 className="auth-title">Welcome Back</h1>
-            <p className="auth-subtitle">Sign in to continue your skill swapping journey</p>
+    <>
+      <div className="auth-split-page">
+        {/* LEFT: Hero Branding Side */}
+        <div className="auth-split-left">
+          <div className="hero-content">
+            <img src="/1000078980-removebg-preview.png" alt="SkillSwap" className="hero-logo" />
+            <h1>Master New Skills</h1>
+            <p>Join the premier knowledge-exchange network. Connect with experts, share your talents, and grow together.</p>
           </div>
+          <div className="auth-background">
+            <div className="gradient-orb orb-1"></div>
+            <div className="gradient-orb orb-2"></div>
+            <div className="gradient-orb orb-3"></div>
+          </div>
+        </div>
 
-          {error && (
-            <div className="alert alert-error animate-shake">
-              <svg className="alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" />
-                <line x1="12" y1="8" x2="12" y2="12" />
-                <line x1="12" y1="16" x2="12.01" y2="16" />
-              </svg>
-              <span>{error}</span>
+        {/* RIGHT: Form Side */}
+        <div className="auth-split-right">
+          <div className="auth-card glass">
+            <div className="auth-header">
+              <h1 className="auth-title">Welcome Back</h1>
+              <p className="auth-subtitle">Sign in to continue your journey</p>
             </div>
-          )}
 
-          {needsVerification && verificationType === 'legacy' && (
-            <div className="verify-banner animate-fade-in">
-              <div className="banner-icon">📧</div>
-              <div className="banner-content">
-                <p>Your email is not verified yet.</p>
+            {error && (
+              <div className="alert alert-error animate-shake">
+                <svg className="alert-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <span>{error}</span>
+              </div>
+            )}
+
+            {needsVerification && verificationType === 'legacy' && (
+              <div className="verify-banner animate-fade-in">
+                <div className="banner-icon"><Mail size={24} color="#92400e" /></div>
+                <div className="banner-content">
+                  <p>Your email is not verified yet.</p>
+                  <button
+                    type="button"
+                    className="btn btn-text"
+                    onClick={handleResendVerification}
+                    disabled={resending}
+                  >
+                    {resending ? 'Sending...' : 'Resend Verification Email'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="auth-form">
+              <div className="input-group">
+                <label className="input-label">
+                  <span className="label-text">Email Address</span>
+                  <span className="label-required">*</span>
+                </label>
+                <div className="input-wrapper">
+                  <svg className="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
+                    <polyline points="22,6 12,13 2,6" />
+                  </svg>
+                  <input
+                    type="email"
+                    name="email"
+                    className="input-field"
+                    placeholder="you@example.com"
+                    value={form.email}
+                    onChange={handleChange}
+                    required
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              <div className="input-group">
+                <label className="input-label">
+                  <span className="label-text">Password</span>
+                  <span className="label-required">*</span>
+                </label>
+                <div className="input-wrapper">
+                  <svg className="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  <input
+                    type="password"
+                    name="password"
+                    className="input-field"
+                    placeholder="Enter your password"
+                    value={form.password}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="form-options">
                 <button
                   type="button"
-                  className="btn btn-text"
-                  onClick={handleResendVerification}
-                  disabled={resending}
+                  className="btn btn-link"
+                  onClick={() => navigate('/forgot-password')}
                 >
-                  {resending ? 'Sending...' : 'Resend Verification Email'}
+                  Forgot password?
                 </button>
               </div>
-            </div>
-          )}
 
-          <form onSubmit={handleSubmit} className="auth-form">
-            <div className="input-group">
-              <label className="input-label">
-                <span className="label-text">Email Address</span>
-                <span className="label-required">*</span>
-              </label>
-              <div className="input-wrapper">
-                <svg className="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-                  <polyline points="22,6 12,13 2,6" />
-                </svg>
-                <input
-                  type="email"
-                  name="email"
-                  className="input-field"
-                  placeholder="you@example.com"
-                  value={form.email}
-                  onChange={handleChange}
-                  required
-                  autoFocus
-                />
+              <button
+                type="submit"
+                className={`btn btn-primary btn-lg btn-full ${loading ? 'loading' : ''}`}
+                disabled={loading}
+              >
+                {loading ? (
+                  <>
+                    <span className="spinner"></span>
+                    <span>Signing in...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Sign In</span>
+                    <svg className="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                      <polyline points="12 5 19 12 12 19" />
+                    </svg>
+                  </>
+                )}
+              </button>
+            </form>
+
+            <div className="auth-footer">
+              <div className="divider">
+                <span>Don't have an account?</span>
               </div>
-            </div>
-
-            <div className="input-group">
-              <label className="input-label">
-                <span className="label-text">Password</span>
-                <span className="label-required">*</span>
-              </label>
-              <div className="input-wrapper">
-                <svg className="input-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                </svg>
-                <input
-                  type="password"
-                  name="password"
-                  className="input-field"
-                  placeholder="Enter your password"
-                  value={form.password}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="form-options">
               <button
                 type="button"
-                className="btn btn-link"
-                onClick={() => navigate('/forgot-password')}
+                className="btn btn-secondary btn-full"
+                onClick={() => navigate('/register')}
               >
-                Forgot password?
+                Create Account
               </button>
             </div>
-
-            <button
-              type="submit"
-              className={`btn btn-primary btn-lg btn-full ${loading ? 'loading' : ''}`}
-              disabled={loading}
-            >
-              {loading ? (
-                <>
-                  <span className="spinner"></span>
-                  <span>Signing in...</span>
-                </>
-              ) : (
-                <>
-                  <span>Sign In</span>
-                  <svg className="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                    <polyline points="12 5 19 12 12 19" />
-                  </svg>
-                </>
-              )}
-            </button>
-          </form>
-
-          <div className="auth-footer">
-            <div className="divider">
-              <span>Don't have an account?</span>
-            </div>
-            <button
-              type="button"
-              className="btn btn-secondary btn-full"
-              onClick={() => navigate('/register')}
-            >
-              Create Account
-            </button>
           </div>
         </div>
       </div>
 
       <style>{`
-        .auth-page {
+        .auth-split-page {
+          display: flex;
           min-height: 100vh;
+          width: 100%;
+          background: #ffffff;
+        }
+
+        .auth-split-left {
+          flex: 1;
+          position: relative;
+          background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
           display: flex;
           align-items: center;
           justify-content: center;
-          position: relative;
           overflow: hidden;
-          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          padding: 4rem;
+          color: white;
+        }
+
+        .hero-content {
+          position: relative;
+          z-index: 10;
+          max-width: 480px;
+        }
+
+        .hero-logo {
+          width: 200px;
+          margin-bottom: 2rem;
+          filter: brightness(0) invert(1);
+        }
+
+        .hero-content h1 {
+          font-size: 3rem;
+          font-weight: 800;
+          line-height: 1.2;
+          margin-bottom: 1.5rem;
+        }
+
+        .hero-content p {
+          font-size: 1.25rem;
+          line-height: 1.6;
+          color: rgba(255, 255, 255, 0.9);
+        }
+
+        @media (max-width: 900px) {
+          .auth-split-left {
+            display: none;
+          }
+        }
+
+        .auth-split-right {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 2rem;
+          max-width: 600px;
+          margin: 0 auto;
+        }
+
+        /* Legacy class re-maps */
+        .auth-container {
+          width: 100%;
+          max-width: 440px;
         }
 
         .auth-background {
           position: absolute;
           inset: 0;
           overflow: hidden;
+          pointer-events: none;
         }
 
         .gradient-orb {
@@ -278,12 +344,11 @@ function LoginPage() {
         }
 
         .auth-card {
-          background: rgba(255, 255, 255, 0.95);
-          backdrop-filter: blur(20px);
-          border-radius: 24px;
-          padding: 2.5rem;
-          box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-          border: 1px solid rgba(255, 255, 255, 0.3);
+          background: transparent;
+          border-radius: 0;
+          padding: 0;
+          box-shadow: none;
+          border: none;
         }
 
         .auth-header {
@@ -591,7 +656,7 @@ function LoginPage() {
           to { opacity: 1; transform: translateY(0); }
         }
       `}</style>
-    </div>
+    </>
   );
 }
 

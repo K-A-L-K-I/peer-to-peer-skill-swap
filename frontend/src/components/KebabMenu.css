@@ -1,0 +1,103 @@
+.kebab-menu-container {
+    display: inline-block;
+    position: relative;
+    /* Ensure it has a higher z-index if inside a card */
+    z-index: 1000;
+}
+
+.kebab-trigger {
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    font-size: 20px;
+    line-height: 1;
+    color: #64748b;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+}
+
+.kebab-trigger:hover,
+.kebab-trigger.active {
+    background: rgba(0, 0, 0, 0.05);
+    color: #1e293b;
+}
+
+/* The Popup Dropdown */
+.kebab-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    right: 0;
+    min-width: 180px;
+    background: #ffffff;
+    border-radius: 12px;
+    z-index: 1001;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+    animation: dropdownFadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    border: 1px solid #f1f5f9;
+}
+
+@keyframes dropdownFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-8px) scale(0.95);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.kebab-list {
+    list-style: none;
+    margin: 0;
+    padding: 0.5rem;
+}
+
+.kebab-item {
+    margin: 0;
+    padding: 0;
+}
+
+.kebab-action-btn {
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: none;
+    padding: 0.75rem 1rem;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #334155;
+    cursor: pointer;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    transition: background 0.2s, color 0.2s;
+}
+
+.kebab-action-btn:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+}
+
+.kebab-icon {
+    font-size: 1.1rem;
+    opacity: 0.8;
+}
+
+/* Destructive styling */
+.kebab-action-btn.destructive {
+    color: #ef4444;
+}
+
+.kebab-action-btn.destructive:hover {
+    background: #fef2f2;
+    color: #dc2626;
+}

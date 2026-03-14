@@ -22,8 +22,8 @@ class SocketService {
 
     this.isConnecting = true;
 
-    // Use environment variable for socket URL
-    const socketUrl = process.env.REACT_APP_SOCKET_URL || `https://${window.location.hostname}:5000`;
+    // Use environment variable for socket URL, or match the current window's protocol
+    const socketUrl = process.env.REACT_APP_SOCKET_URL || `${window.location.protocol}//${window.location.hostname}:5000`;
 
     console.log('Connecting to socket:', socketUrl);
 
@@ -32,7 +32,6 @@ class SocketService {
       transports: ['websocket', 'polling'],
       reconnection: true,
       reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
       reconnectionDelay: 1000,
       timeout: 10000,
       // Allow self-signed certificates

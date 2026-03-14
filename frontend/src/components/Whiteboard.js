@@ -164,13 +164,7 @@ const Whiteboard = ({ webrtcService }) => {
         }
     };
 
-    // Helper function to handle raw moveTo events from remote
-    const startRemoteStroke = (payload) => {
-        const canvas = canvasRef.current;
-        const rect = canvas.getBoundingClientRect();
-        contextRef.current.beginPath();
-        contextRef.current.moveTo(payload.x * rect.width, payload.y * rect.height);
-    }
+
 
     const drawRemoteStroke = (payload) => {
         if (!contextRef.current || !canvasRef.current) return;

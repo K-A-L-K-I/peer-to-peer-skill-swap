@@ -29,15 +29,15 @@ const sendSkillSwapRequest = async (req, res) => {
     const sender = await User.findById(req.user._id);
     const senderOffered = (sender.skillsOffered || []).map(s => s.toLowerCase());
     const senderWanted = (sender.skillsWanted || []).map(s => s.toLowerCase());
-    
+
     if (!senderOffered.includes(offeredSkill.toLowerCase())) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: `You can only offer skills from your profile: ${sender.skillsOffered.join(', ') || 'none'}`
       });
     }
-    
+
     if (!senderWanted.includes(wantedSkill.toLowerCase())) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         message: `You can only request skills you want to learn: ${sender.skillsWanted.join(', ') || 'none'}`
       });
     }
@@ -143,8 +143,50 @@ const rejectSkillSwapRequest = async (req, res) => {
   return respondToSkillSwapRequest(req, res, 'rejected');
 };
 
+const completeSkillSwapRequest = async (req, res) => {
+  try {
+    const swapRequest = await SkillSwapRequest.findById(req.params.id);
+
+    if (!swapRequest) {
+      return res.status(404).json({ message: 'Skill swap request not found' });
+    }
+
+    if (String(swapRequest.toUser) !== String(req.user._id) && String(swapRequest.fromUser) !== String(req.user._id)) {
+      return res.status(403).json({ message: 'Only participants can complete this request' });
+    }
+
+    if (swapRequest.status !== 'accepted') {
+      return res.status(400).json({ message: `Cannot complete request with status: ${swapRequest.status}` });
+    }
+
+    swapRequest.status = 'completed';
+    await swapRequest.save();
+
+    const populatedRequest = await SkillSwapRequest.findById(swapRequest._id)
+      .populate('fromUser', 'name email skillsOffered skillsWanted role isBlocked')
+      .populate('toUser', 'name email skillsOffered skillsWanted role isBlocked');
+
+    await Notification.create({
+      user: String(swapRequest.toUser) === String(req.user._id) ? swapRequest.fromUser : swapRequest.toUser,
+      type: 'swap_request',
+      title: 'Skill Swap Completed',
+      body: `Your skill swap was marked as completed. You can now leave a review!`,
+      relatedModel: 'SkillSwapRequest',
+      relatedId: swapRequest._id
+    });
+
+    return res.status(200).json({
+      message: 'Skill swap request completed',
+      request: populatedRequest
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message || 'Server error' });
+  }
+};
+
 module.exports = {
   sendSkillSwapRequest,
   acceptSkillSwapRequest,
-  rejectSkillSwapRequest
+  rejectSkillSwapRequest,
+  completeSkillSwapRequest
 };

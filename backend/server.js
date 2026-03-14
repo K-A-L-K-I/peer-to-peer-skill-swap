@@ -93,6 +93,8 @@ io.use((socket, next) => {
 });
 
 // Socket.io connection handling
+const onlineUsersSet = new Set(); // Track all connected user IDs
+
 io.on('connection', (socket) => {
   console.log(`🔌 User connected: ${socket.userId} (Socket: ${socket.id})`);
 
@@ -103,16 +105,35 @@ io.on('connection', (socket) => {
   socket.on('register', (data) => {
     const { userId, name } = data;
     socket.userData = { userId, name, socketId: socket.id };
+
+    // Add to strict tracking set
+    onlineUsersSet.add(userId);
+
+    // Broadcast to everyone that this user is online
     io.emit('user-online', { userId, name });
-    console.log(`👤 User registered: ${name} (${userId})`);
+    console.log(`👤 User registered/online: ${name} (${userId})`);
   });
 
-  // Get currently online users
+  // Get currently online users (on demand)
   socket.on('get-online-users', () => {
-    const onlineUsers = Array.from(io.sockets.sockets.values())
-      .map(s => s.userId)
-      .filter(id => id);
-    socket.emit('online-users-list', [...new Set(onlineUsers)]);
+    // Send the tracked set back to the requester
+    socket.emit('online-users-list', Array.from(onlineUsersSet));
+  });
+
+  // Handle disconnection
+  socket.on('disconnect', () => {
+    console.log(`🔌 User disconnected: ${socket.userId}`);
+
+    // Remove from strict tracking set
+    if (socket.userId) {
+      // Check if user has other active sockets before declaring fully offline
+      const userRooms = io.sockets.adapter.rooms.get(`user-${socket.userId}`);
+      if (!userRooms || userRooms.size === 0) {
+        onlineUsersSet.delete(socket.userId);
+        io.emit('user-offline', socket.userId);
+        console.log(`👤 User went offline: ${socket.userId}`);
+      }
+    }
   });
 
   // ==================== WEBRTC SIGNALING ====================
@@ -284,6 +305,30 @@ io.on('connection', (socket) => {
     }
   });
 
+  // 7. Handle in-call chat messages
+  socket.on('call-message', (data) => {
+    const { to, message, timestamp, callId } = data;
+    console.log(`💬 In-call message from ${socket.userId} to ${to}`);
+    // Relay the message to the target user
+    io.to(`user-${to}`).emit('call-message', {
+      from: socket.userId,
+      message,
+      timestamp,
+      callId
+    });
+  });
+
+  // 8. Handle in-call floating emojis
+  socket.on('emoji-reaction', (data) => {
+    const { to, emoji, callId } = data;
+    console.log(`🚀 Emoji reaction from ${socket.userId} to ${to}`);
+    // Relay the emoji to the target user
+    io.to(`user-${to}`).emit('emoji-reaction', {
+      from: socket.userId,
+      emoji,
+      callId
+    });
+  });
   // ==================== CHAT MESSAGING ====================
 
   socket.on('typing', (data) => {
@@ -378,6 +423,8 @@ app.use('/api/swap-requests', require('./routes/swapRequestRoutes'));
 app.use('/api/messages', require('./routes/messageRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/notifications', require('./routes/notificationRoutes'));
+app.use('/api/reviews', require('./routes/reviewRoutes'));
+app.use('/api/reports', require('./routes/reportRoutes'));
 app.use('/api/otp', require('./routes/otpRoutes'));
 app.use('/api/calls', require('./routes/callRoutes'));
 app.use('/api/meetings', require('./routes/meetingRoutes'));

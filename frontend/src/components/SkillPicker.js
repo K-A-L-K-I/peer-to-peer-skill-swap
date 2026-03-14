@@ -1,18 +1,20 @@
 import { useState, useEffect } from 'react';
 import api from '../services/api';
 
+import { Code, Palette, Globe, Music, Dumbbell, BookOpen, Scissors, Briefcase, ChefHat, Pin, Check, Search, X, ChevronDown } from 'lucide-react';
+
 // Move categoryConfig outside component so SkillButton can access it
 const categoryConfig = {
-  programming: { icon: '💻', label: 'Technology & Programming', color: '#2563eb' },
-  design: { icon: '🎨', label: 'Design & Creative', color: '#7c3aed' },
-  languages: { icon: '🗣️', label: 'Languages', color: '#059669' },
-  music: { icon: '🎵', label: 'Music & Audio', color: '#dc2626' },
-  sports: { icon: '⚽', label: 'Sports & Fitness', color: '#ea580c' },
-  academic: { icon: '📖', label: 'Academic & STEM', color: '#0891b2' },
-  arts_crafts: { icon: '✂️', label: 'Arts & Crafts', color: '#db2777' },
-  business: { icon: '💼', label: 'Business & Career', color: '#4f46e5' },
-  cooking: { icon: '🍳', label: 'Cooking & Culinary', color: '#d97706' },
-  other: { icon: '📌', label: 'Other Skills', color: '#6b7280' }
+  programming: { icon: <Code size={18} />, label: 'Technology & Programming', color: '#2563eb' },
+  design: { icon: <Palette size={18} />, label: 'Design & Creative', color: '#7c3aed' },
+  languages: { icon: <Globe size={18} />, label: 'Languages', color: '#059669' },
+  music: { icon: <Music size={18} />, label: 'Music & Audio', color: '#dc2626' },
+  sports: { icon: <Dumbbell size={18} />, label: 'Sports & Fitness', color: '#ea580c' },
+  academic: { icon: <BookOpen size={18} />, label: 'Academic & STEM', color: '#0891b2' },
+  arts_crafts: { icon: <Scissors size={18} />, label: 'Arts & Crafts', color: '#db2777' },
+  business: { icon: <Briefcase size={18} />, label: 'Business & Career', color: '#4f46e5' },
+  cooking: { icon: <ChefHat size={18} />, label: 'Cooking & Culinary', color: '#d97706' },
+  other: { icon: <Pin size={18} />, label: 'Other Skills', color: '#6b7280' }
 };
 
 // Move SkillButton outside so it's not recreated on every render
@@ -28,7 +30,7 @@ function SkillButton({ skill, isSelected, onClick, showCategory }) {
       {showCategory && (
         <span className="skill-cat">{categoryConfig[skill.category]?.label}</span>
       )}
-      {isSelected && <span className="check-icon">✓</span>}
+      {isSelected && <span className="check-icon"><Check size={16} /></span>}
     </button>
   );
 }
@@ -115,7 +117,7 @@ function SkillPicker({ selectedSkills, onChange, mode = 'offer' }) {
       {/* Search & Controls */}
       <div className="skill-picker-header">
         <div className="skill-search-v2">
-          <span className="search-icon">🔍</span>
+          <span className="search-icon"><Search size={18} /></span>
           <input
             type="text"
             placeholder="Search skills (e.g., 'Python', 'Guitar', 'Spanish')..."
@@ -123,7 +125,7 @@ function SkillPicker({ selectedSkills, onChange, mode = 'offer' }) {
             onChange={(e) => setSearchTerm(e.target.value)}
           />
           {searchTerm && (
-            <button className="clear-search" onClick={() => setSearchTerm('')}>×</button>
+            <button className="clear-search" onClick={() => setSearchTerm('')}><X size={16} /></button>
           )}
         </div>
 
@@ -151,7 +153,7 @@ function SkillPicker({ selectedSkills, onChange, mode = 'offer' }) {
                   title="Click to remove"
                 >
                   {skill?.displayName || skillName}
-                  <span className="remove-icon">×</span>
+                  <span className="remove-icon"><X size={14} /></span>
                 </span>
               );
             })}
@@ -163,8 +165,8 @@ function SkillPicker({ selectedSkills, onChange, mode = 'offer' }) {
       {/* Search Results */}
       {searchTerm ? (
         <div className="search-results">
-          <h4>
-            🔍 Search Results
+          <h4 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Search size={18} /> Search Results
             <span className="result-count">({filteredSkills.length} found)</span>
           </h4>
           {filteredSkills.length === 0 ? (
@@ -212,7 +214,9 @@ function SkillPicker({ selectedSkills, onChange, mode = 'offer' }) {
                       )}
                     </span>
                   </div>
-                  <span className={`expand-icon ${isExpanded ? 'rotated' : ''}`}>▼</span>
+                  <span className={`expand-icon ${isExpanded ? 'rotated' : ''}`}>
+                    <ChevronDown size={20} />
+                  </span>
                 </button>
 
                 {isExpanded && (

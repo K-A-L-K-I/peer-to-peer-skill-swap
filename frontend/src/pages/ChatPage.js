@@ -3,7 +3,11 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../services/api';
 import socketService from '../services/socketService';
+import useAuthStore from '../store/authStore';
 import VideoCall from '../components/VideoCall';
+import ReportModal from '../components/ReportModal';
+import KebabMenu from '../components/KebabMenu';
+import { Calendar, Phone, Video, AlertTriangle, ArrowLeft, MessageSquarePlus, MessageCircle } from 'lucide-react';
 
 // ==================== UTILITY COMPONENTS ====================
 
@@ -151,12 +155,12 @@ const MessageBubble = ({ message, isMe, isFirstInGroup, isLastInGroup, showAvata
         <div style={{
           padding: '16px 20px',
           borderRadius: isMe
-            ? (isFirstInGroup && isLastInGroup ? '24px 24px 24px 12px' :
-              isFirstInGroup ? '24px 24px 12px 24px' :
-                isLastInGroup ? '24px 12px 24px 24px' : '24px 12px 12px 24px')
-            : (isFirstInGroup && isLastInGroup ? '24px 24px 24px 12px' :
-              isFirstInGroup ? '24px 24px 24px 12px' :
-                isLastInGroup ? '12px 24px 24px 24px' : '12px 24px 24px 12px'),
+            ? (isFirstInGroup && isLastInGroup ? '24px 24px 4px 24px' :
+              isFirstInGroup ? '24px 24px 4px 24px' :
+                isLastInGroup ? '24px 4px 24px 24px' : '24px 4px 4px 24px')
+            : (isFirstInGroup && isLastInGroup ? '24px 24px 24px 4px' :
+              isFirstInGroup ? '24px 24px 24px 4px' :
+                isLastInGroup ? '4px 24px 24px 24px' : '4px 24px 24px 4px'),
           background: isMe
             ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
             : '#f3f4f6',
@@ -227,6 +231,8 @@ const ChatListItem = ({ chat, isActive, onClick, currentUserId }) => {
   const otherUser = chat.fromUser?._id === currentUserId ? chat.toUser : chat.fromUser;
   const lastMessage = chat.lastMessage || { content: 'No messages yet', createdAt: chat.createdAt };
   const unreadCount = chat.unreadCount || 0;
+  const onlineUsers = useAuthStore(state => state.onlineUsers);
+  const isUserOnline = onlineUsers.includes(String(otherUser?._id));
 
   return (
     <div
@@ -249,7 +255,7 @@ const ChatListItem = ({ chat, isActive, onClick, currentUserId }) => {
         if (!isActive) e.currentTarget.style.background = 'transparent';
       }}
     >
-      <Avatar user={otherUser} size="md" showStatus={true} isOnline={chat.isOnline} />
+      <Avatar user={otherUser} size="md" showStatus={true} isOnline={isUserOnline} />
 
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
@@ -326,6 +332,12 @@ function ChatPage() {
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('');
   const [isScheduling, setIsScheduling] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportSuccess, setReportSuccess] = useState('');
+  // incomingCallForVideoCall: set when user accepts from the global popup (via location.state)
+  const [incomingCallForVideoCall, setIncomingCallForVideoCall] = useState(null);
+
+  const onlineUsers = useAuthStore(state => state.onlineUsers);
 
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -381,6 +393,32 @@ function ChatPage() {
     }
   }, []);
 
+  // Handle incoming call passed via navigation state (from global AppLayout popup)
+  useEffect(() => {
+    const incoming = location.state?.incomingCall;
+    if (incoming && !showVideoCall && chats.length > 0) {
+      console.log('📱 [ChatPage] Incoming call from navigation state:', incoming);
+      setIncomingCallForVideoCall(incoming);
+      setCallType(incoming.callType || 'video');
+      setShowVideoCall(true);
+
+      // Switch to the chat with the caller so targetUser is correct
+      const chatWithCaller = chats.find(c => {
+        const reqId = typeof c.requester === 'object' ? c.requester._id : c.requester;
+        const provId = typeof c.provider === 'object' ? c.provider._id : c.provider;
+        return String(reqId) === String(incoming.from) || String(provId) === String(incoming.from);
+      });
+
+      if (chatWithCaller) {
+        setActiveChatId(chatWithCaller._id);
+        navigate('/chat', { replace: true, state: { swapRequestId: chatWithCaller._id } });
+      } else {
+        // Clear from location state
+        navigate('/chat', { replace: true, state: { swapRequestId: activeChatId } });
+      }
+    }
+  }, [location.state?.incomingCall, showVideoCall, chats, activeChatId, navigate]);
+
   // Socket setup
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -431,38 +469,10 @@ function ChatPage() {
     const unsubConnect = socketService.on('connect', () => {
       setIsConnected(true);
       if (activeChatId) socketService.joinChat(activeChatId);
-      socketService.emit('get-online-users');
     });
 
     const unsubDisconnect = socketService.on('disconnect', () => {
       setIsConnected(false);
-    });
-
-    const unsubOnlineList = socketService.on('online-users-list', (onlineUserIds) => {
-      setChats(prev => prev.map(c => {
-        const fromId = String(c.fromUser?._id || c.fromUser);
-        const toId = String(c.toUser?._id || c.toUser);
-        const otherId = fromId === String(currentUserId) ? toId : fromId;
-        return { ...c, isOnline: onlineUserIds.includes(otherId) };
-      }));
-    });
-
-    const unsubUserOnline = socketService.on('user-online', ({ userId }) => {
-      setChats(prev => prev.map(c => {
-        const fromId = String(c.fromUser?._id || c.fromUser);
-        const toId = String(c.toUser?._id || c.toUser);
-        const otherId = fromId === String(currentUserId) ? toId : fromId;
-        return String(userId) === otherId ? { ...c, isOnline: true } : c;
-      }));
-    });
-
-    const unsubUserOffline = socketService.on('user-offline', ({ userId }) => {
-      setChats(prev => prev.map(c => {
-        const fromId = String(c.fromUser?._id || c.fromUser);
-        const toId = String(c.toUser?._id || c.toUser);
-        const otherId = fromId === String(currentUserId) ? toId : fromId;
-        return String(userId) === otherId ? { ...c, isOnline: false } : c;
-      }));
     });
 
     // Check initial connection
@@ -479,9 +489,6 @@ function ChatPage() {
       unsubTyping();
       unsubConnect();
       unsubDisconnect();
-      unsubOnlineList();
-      unsubUserOnline();
-      unsubUserOffline();
       document.removeEventListener('initiate-scheduled-call', handleScheduledCall);
     };
   }, [activeChatId, currentUserId]);
@@ -733,7 +740,22 @@ function ChatPage() {
               padding: '3rem 1rem',
               textAlign: 'center'
             }}>
-              <div style={{ fontSize: '5rem', marginBottom: '1.5rem' }}>💬</div>
+              <svg width="180" height="180" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ marginBottom: '1.5rem', opacity: 0.8 }}>
+                <path d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 13.8214 2.48697 15.5291 3.33782 17L2.5 21.5L7 20.6622C8.47087 21.513 10.1786 22 12 22Z" fill="url(#paint0_linear)" stroke="url(#paint1_linear)" strokeWidth="0.5" />
+                <path d="M8 12C8 12.5523 7.55228 13 7 13C6.44772 13 6 12.5523 6 12C6 11.4477 6.44772 11 7 11C7.55228 11 8 11.4477 8 12Z" fill="white" />
+                <path d="M13 12C13 12.5523 12.5523 13 12 13C11.4477 13 11 12.5523 11 12C11 11.4477 11.4477 11 12 11C12.5523 11 13 11.4477 13 12Z" fill="white" />
+                <path d="M18 12C18 12.5523 17.5523 13 17 13C16.4477 13 16 12.5523 16 12C16 11.4477 16.4477 11 17 11C17.5523 11 18 11.4477 18 12Z" fill="white" />
+                <defs>
+                  <linearGradient id="paint0_linear" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+                    <stop stopColor="#667eea" />
+                    <stop offset="1" stopColor="#764ba2" />
+                  </linearGradient>
+                  <linearGradient id="paint1_linear" x1="2" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+                    <stop stopColor="#667eea" />
+                    <stop offset="1" stopColor="#764ba2" />
+                  </linearGradient>
+                </defs>
+              </svg>
               <p style={{ color: '#6b7280', margin: '0 0 0.5rem 0', fontSize: '1.5rem', fontWeight: 500 }}>
                 No active conversations
               </p>
@@ -788,7 +810,9 @@ function ChatPage() {
               alignItems: 'center',
               justifyContent: 'space-between',
               background: 'rgba(255,255,255,0.95)',
-              backdropFilter: 'blur(10px)'
+              backdropFilter: 'blur(10px)',
+              position: 'relative',
+              zIndex: 10
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                 {/* Mobile back button */}
@@ -807,23 +831,36 @@ function ChatPage() {
                     fontSize: '1.75rem'
                   }}
                 >
-                  ←
+                  <ArrowLeft size={24} color="#4b5563" />
                 </button>
 
-                <Avatar user={otherUser} size="md" showStatus={true} isOnline={activeChat.isOnline} />
+                <Avatar user={otherUser} size="md" showStatus={true} isOnline={onlineUsers.includes(String(otherUser?._id))} />
 
                 <div>
                   <h3 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 700, color: '#1f2937' }}>
                     {otherUser?.name || 'Unknown'}
                   </h3>
-                  <p style={{ margin: 0, fontSize: '1.125rem', color: otherUserTyping ? '#667eea' : '#6b7280', fontWeight: otherUserTyping ? 600 : 400 }}>
-                    {otherUserTyping ? 'typing...' : (activeChat.isOnline ? 'Online' : 'Offline')}
+                  <p style={{ margin: 0, fontSize: '1.125rem', color: otherUserTyping ? '#667eea' : '#6b7280', fontWeight: otherUserTyping ? 600 : 400, display: 'flex', alignItems: 'center' }}>
+                    {otherUserTyping ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center' }}>
+                        typing
+                        <span style={{ animation: 'bounceText 1.4s infinite ease-in-out both', animationDelay: '0s', display: 'inline-block', marginLeft: '1px' }}>.</span>
+                        <span style={{ animation: 'bounceText 1.4s infinite ease-in-out both', animationDelay: '0.16s', display: 'inline-block', marginLeft: '1px' }}>.</span>
+                        <span style={{ animation: 'bounceText 1.4s infinite ease-in-out both', animationDelay: '0.32s', display: 'inline-block', marginLeft: '1px' }}>.</span>
+                        <style>{`
+                          @keyframes bounceText {
+                            0%, 80%, 100% { transform: translateY(0); }
+                            40% { transform: translateY(-3px); }
+                          }
+                        `}</style>
+                      </span>
+                    ) : (onlineUsers.includes(String(otherUser?._id)) ? 'Online' : 'Offline')}
                   </p>
                 </div>
               </div>
 
-              {/* Call buttons */}
-              <div style={{ display: 'flex', gap: '12px' }}>
+              {/* Call and Report buttons */}
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                 <button
                   onClick={() => handleCall('schedule')}
                   title="Schedule Call"
@@ -849,7 +886,7 @@ function ChatPage() {
                     e.target.style.transform = 'scale(1)';
                   }}
                 >
-                  📅
+                  <Calendar size={22} color="#4b5563" />
                 </button>
                 <button
                   onClick={() => handleCall('audio')}
@@ -875,7 +912,7 @@ function ChatPage() {
                     e.target.style.transform = 'scale(1)';
                   }}
                 >
-                  📞
+                  <Phone size={22} color="#4b5563" />
                 </button>
                 <button
                   onClick={() => handleCall('video')}
@@ -901,8 +938,18 @@ function ChatPage() {
                     e.target.style.transform = 'scale(1)';
                   }}
                 >
-                  📹
+                  <Video size={22} color="#4b5563" />
                 </button>
+                <KebabMenu
+                  actions={[
+                    {
+                      label: 'Report User',
+                      icon: <AlertTriangle size={16} />,
+                      destructive: true,
+                      onClick: () => setShowReportModal(otherUser)
+                    }
+                  ]}
+                />
               </div>
             </div>
 
@@ -943,7 +990,7 @@ function ChatPage() {
                     fontSize: '5rem',
                     marginBottom: '2rem'
                   }}>
-                    👋
+                    <MessageSquarePlus size={64} color="#667eea" />
                   </div>
                   <h3 style={{ margin: '0 0 0.75rem 0', color: '#1f2937', fontSize: '2rem', fontWeight: 700 }}>
                     Start the conversation
@@ -1056,7 +1103,11 @@ function ChatPage() {
                   currentUser={currentUser}
                   targetUser={otherUser}
                   callType={callType}
-                  onClose={() => setShowVideoCall(false)}
+                  onClose={() => {
+                    setShowVideoCall(false);
+                    setIncomingCallForVideoCall(null);
+                  }}
+                  incomingCall={incomingCallForVideoCall}
                 />
               </div>
             )}
@@ -1086,7 +1137,7 @@ function ChatPage() {
               marginBottom: '3rem',
               animation: 'float 6s ease-in-out infinite'
             }}>
-              💬
+              <MessageCircle size={96} color="#9ca3af" strokeWidth={1} />
             </div>
             <style>{`
               @keyframes float {
@@ -1101,68 +1152,105 @@ function ChatPage() {
               Choose a chat from the sidebar to start messaging with your skill swap partners
             </p>
           </div>
-        )}
-      </div>
+        )
+        }
+      </div >
 
       {/* Schedule Meeting Modal */}
-      {showScheduleModal && (
-        <div style={{
-          position: 'fixed', inset: 0, zIndex: 9999, display: 'flex',
-          alignItems: 'center', justifyContent: 'center',
-          background: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(4px)'
-        }}>
+      {
+        showReportModal && otherUser && (
+          <ReportModal
+            reportedUser={otherUser}
+            onClose={() => setShowReportModal(false)}
+            onSuccess={() => {
+              setShowReportModal(false);
+              setReportSuccess('User reported successfully.');
+              setTimeout(() => setReportSuccess(''), 3000);
+            }}
+          />
+        )
+      }
+
+      {
+        reportSuccess && (
           <div style={{
-            background: 'white', borderRadius: '24px', padding: '32px',
-            width: '100%', maxWidth: '400px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+            position: 'fixed',
+            bottom: '20px',
+            right: '20px',
+            background: '#10b981',
+            color: 'white',
+            padding: '12px 24px',
+            borderRadius: '8px',
+            boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
+            zIndex: 9999,
+            fontWeight: 600,
+            animation: 'slideUp 0.3s ease'
           }}>
-            <h3 style={{ margin: '0 0 8px 0', fontSize: '1.5rem', fontWeight: 700, color: '#1f2937' }}>
-              Schedule Video Call
-            </h3>
-            <p style={{ margin: '0 0 24px 0', color: '#6b7280', fontSize: '0.875rem' }}>
-              Propose a time to swap skills with {otherUser?.name}.
-            </p>
+            {reportSuccess}
+          </div>
+        )
+      }
 
-            <div style={{ marginBottom: '16px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: 600, color: '#374151' }}>Date</label>
-              <input type="date" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} min={new Date().toISOString().split('T')[0]} style={{
-                width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1px solid #d1d5db',
-                fontSize: '1rem', outline: 'none', appearance: 'none', background: '#f9fafb'
-              }} />
-            </div>
+      {
+        showScheduleModal && (
+          <div style={{
+            position: 'fixed', inset: 0, zIndex: 9999, display: 'flex',
+            alignItems: 'center', justifyContent: 'center',
+            background: 'rgba(15, 23, 42, 0.75)', backdropFilter: 'blur(4px)'
+          }}>
+            <div style={{
+              background: 'white', borderRadius: '24px', padding: '32px',
+              width: '100%', maxWidth: '400px', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+            }}>
+              <h3 style={{ margin: '0 0 8px 0', fontSize: '1.5rem', fontWeight: 700, color: '#1f2937' }}>
+                Schedule Video Call
+              </h3>
+              <p style={{ margin: '0 0 24px 0', color: '#6b7280', fontSize: '0.875rem' }}>
+                Propose a time to swap skills with {otherUser?.name}.
+              </p>
 
-            <div style={{ marginBottom: '32px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: 600, color: '#374151' }}>Time</label>
-              <input type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)} style={{
-                width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1px solid #d1d5db',
-                fontSize: '1rem', outline: 'none', appearance: 'none', background: '#f9fafb'
-              }} />
-            </div>
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: 600, color: '#374151' }}>Date</label>
+                <input type="date" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} min={new Date().toISOString().split('T')[0]} style={{
+                  width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1px solid #d1d5db',
+                  fontSize: '1rem', outline: 'none', appearance: 'none', background: '#f9fafb'
+                }} />
+              </div>
 
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <button
-                onClick={() => setShowScheduleModal(false)}
-                disabled={isScheduling}
-                style={{
-                  flex: 1, padding: '12px', borderRadius: '12px', border: 'none',
-                  background: '#f3f4f6', color: '#4b5563', fontWeight: 600, cursor: 'pointer'
-                }}
-              >Cancel</button>
-              <button
-                onClick={handleScheduleMeeting}
-                disabled={isScheduling || !scheduleDate || !scheduleTime}
-                style={{
-                  flex: 1, padding: '12px', borderRadius: '12px', border: 'none',
-                  background: (!scheduleDate || !scheduleTime) ? '#9ca3af' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  color: 'white', fontWeight: 600, cursor: (!scheduleDate || !scheduleTime) ? 'not-allowed' : 'pointer'
-                }}
-              >
-                {isScheduling ? 'Scheduling...' : 'Confirm'}
-              </button>
+              <div style={{ marginBottom: '32px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.875rem', fontWeight: 600, color: '#374151' }}>Time</label>
+                <input type="time" value={scheduleTime} onChange={e => setScheduleTime(e.target.value)} style={{
+                  width: '100%', padding: '12px 16px', borderRadius: '12px', border: '1px solid #d1d5db',
+                  fontSize: '1rem', outline: 'none', appearance: 'none', background: '#f9fafb'
+                }} />
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button
+                  onClick={() => setShowScheduleModal(false)}
+                  disabled={isScheduling}
+                  style={{
+                    flex: 1, padding: '12px', borderRadius: '12px', border: 'none',
+                    background: '#f3f4f6', color: '#4b5563', fontWeight: 600, cursor: 'pointer'
+                  }}
+                >Cancel</button>
+                <button
+                  onClick={handleScheduleMeeting}
+                  disabled={isScheduling || !scheduleDate || !scheduleTime}
+                  style={{
+                    flex: 1, padding: '12px', borderRadius: '12px', border: 'none',
+                    background: (!scheduleDate || !scheduleTime) ? '#9ca3af' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    color: 'white', fontWeight: 600, cursor: (!scheduleDate || !scheduleTime) ? 'not-allowed' : 'pointer'
+                  }}
+                >
+                  {isScheduling ? 'Scheduling...' : 'Confirm'}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )
+      }
+    </div >
   );
 }
 

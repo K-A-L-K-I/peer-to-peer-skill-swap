@@ -118,7 +118,12 @@ class WebRTCService {
       let errorMessage = 'Camera/Microphone access failed';
 
       if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
-        errorMessage = 'No camera or microphone found on this device. Please connect a camera/microphone or use a different device.';
+        console.warn('⚠️ No physical hardware detected. Generating a mock media stream for testing...');
+        const mockStream = this.createMockStream();
+        this.localStream = mockStream;
+        this.hasVideo = true;
+        this.hasAudio = true;
+        return this.localStream;
       } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
         errorMessage = 'Camera/Microphone permission denied. Please allow access in your browser settings and refresh the page.';
       } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
@@ -133,6 +138,65 @@ class WebRTCService {
 
       throw new Error(errorMessage);
     }
+  }
+
+  createMockStream() {
+    // Create a 640x480 canvas
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 480;
+    const ctx = canvas.getContext('2d');
+
+    // Simple bouncing rectangle animation
+    let w = 80;
+    let h = 80;
+    let x = canvas.width / 2 - w / 2;
+    let y = canvas.height / 2 - h / 2;
+    let dx = 4;
+    let dy = 4;
+
+    const draw = () => {
+      // Background
+      ctx.fillStyle = '#1e293b'; // Slate background
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Text
+      ctx.fillStyle = '#60a5fa'; // Blue text
+      ctx.font = 'bold 36px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('Mock Camera', canvas.width / 2, 60);
+
+      ctx.fillStyle = '#94a3b8'; // Small gray text
+      ctx.font = '20px Arial';
+      ctx.fillText('(Hardware not found)', canvas.width / 2, 95);
+
+      // Bouncing box
+      ctx.fillStyle = '#22c55e'; // Green box
+      ctx.fillRect(x, y, w, h);
+
+      // Update position
+      if (x + w >= canvas.width || x <= 0) dx = -dx;
+      if (y + h >= canvas.height || y <= 0) dy = -dy;
+
+      x += dx;
+      y += dy;
+
+      requestAnimationFrame(draw);
+    };
+    draw();
+
+    // 30 FPS Canvas stream
+    const videoStream = canvas.captureStream(30);
+
+    // Create a silent audio track
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const destination = audioCtx.createMediaStreamDestination();
+
+    // Combine video from canvas and audio from silent oscillator
+    return new MediaStream([
+      ...videoStream.getVideoTracks(),
+      ...destination.stream.getAudioTracks()
+    ]);
   }
 
   createPeerConnection(isInitiator = false) {
@@ -254,6 +318,16 @@ class WebRTCService {
 
       if (this.onConnectionStateChange) {
         this.onConnectionStateChange(state);
+      }
+
+      if (state === 'connected') {
+        this.startNetworkQualityMonitoring();
+      } else if (state === 'disconnected' || state === 'failed' || state === 'closed') {
+        if (this.statsInterval) {
+          clearInterval(this.statsInterval);
+          this.statsInterval = null;
+          if (this.onNetworkQualityChange) this.onNetworkQualityChange('disconnected');
+        }
       }
 
       if (state === 'failed') {
@@ -528,9 +602,63 @@ class WebRTCService {
 
     // Callbacks
     this.onDataMessage = null;
+    this.onNetworkQualityChange = null;
+    this.statsInterval = null;
   }
 
   // --- New Advanced Features ---
+
+  startNetworkQualityMonitoring() {
+    if (this.statsInterval) clearInterval(this.statsInterval);
+
+    let lastPacketsLost = 0;
+    let lastPacketsReceived = 0;
+
+    this.statsInterval = setInterval(async () => {
+      if (!this.pc || this.pc.connectionState !== 'connected') return;
+
+      try {
+        const stats = await this.pc.getStats();
+        let currentLost = 0;
+        let currentReceived = 0;
+        let rtt = 0;
+
+        stats.forEach(report => {
+          if (report.type === 'inbound-rtp' && report.kind === 'video') {
+            currentLost = report.packetsLost || 0;
+            currentReceived = report.packetsReceived || 0;
+          }
+          if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+            rtt = report.currentRoundTripTime || 0;
+          }
+        });
+
+        // Calculate delta
+        const lostDelta = currentLost - lastPacketsLost;
+        const receivedDelta = currentReceived - lastPacketsReceived;
+        const totalDelta = lostDelta + receivedDelta;
+
+        lastPacketsLost = currentLost;
+        lastPacketsReceived = currentReceived;
+
+        let quality = 'excellent'; // 4 bars
+
+        if (totalDelta > 0) {
+          const lossPercentage = (lostDelta / totalDelta) * 100;
+          if (lossPercentage > 10 || rtt > 0.5) quality = 'poor'; // 1 bar
+          else if (lossPercentage > 5 || rtt > 0.25) quality = 'fair'; // 2 bars
+          else if (lossPercentage > 1 || rtt > 0.1) quality = 'good'; // 3 bars
+        }
+
+        if (this.onNetworkQualityChange) {
+          this.onNetworkQualityChange(quality);
+        }
+
+      } catch (err) {
+        console.warn('⚠️ Failed to fetch WebRTC stats for network quality:', err);
+      }
+    }, 2000); // Check every 2 seconds
+  }
 
   setupDataChannel(channel) {
     channel.onopen = () => console.log('📡 DataChannel OPEN');

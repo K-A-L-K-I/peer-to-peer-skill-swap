@@ -3,7 +3,8 @@ const { protect } = require('../middleware/authMiddleware');
 const {
   sendSkillSwapRequest,
   acceptSkillSwapRequest,
-  rejectSkillSwapRequest
+  rejectSkillSwapRequest,
+  completeSkillSwapRequest
 } = require('../controllers/swapRequestController');
 const SkillSwapRequest = require('../models/SkillSwapRequest');
 
@@ -16,12 +17,12 @@ router.get('/my-requests', protect, async (req, res) => {
       .populate('fromUser', 'name email profilePicture skillsOffered skillsWanted')
       .populate('toUser', 'name email profilePicture')
       .sort({ createdAt: -1 });
-      
+
     const sent = await SkillSwapRequest.find({ fromUser: req.user._id })
       .populate('fromUser', 'name email profilePicture')
       .populate('toUser', 'name email profilePicture skillsOffered skillsWanted')
       .sort({ createdAt: -1 });
-    
+
     res.json({ received, sent });
   } catch (error) {
     res.status(500).json({ message: 'Failed to fetch requests', error: error.message });
@@ -34,17 +35,17 @@ router.get('/:id', protect, async (req, res) => {
     const request = await SkillSwapRequest.findById(req.params.id)
       .populate('fromUser', 'name email profilePicture skillsOffered skillsWanted')
       .populate('toUser', 'name email profilePicture skillsOffered skillsWanted');
-    
+
     if (!request) {
       return res.status(404).json({ message: 'Request not found' });
     }
-    
+
     // Verify user is part of this request
-    if (String(request.fromUser._id) !== String(req.user._id) && 
-        String(request.toUser._id) !== String(req.user._id)) {
+    if (String(request.fromUser._id) !== String(req.user._id) &&
+      String(request.toUser._id) !== String(req.user._id)) {
       return res.status(403).json({ message: 'Not authorized to view this request' });
     }
-    
+
     res.json(request);
   } catch (error) {
     res.status(500).json({ message: 'Failed to fetch request', error: error.message });
@@ -54,5 +55,6 @@ router.get('/:id', protect, async (req, res) => {
 router.post('/', protect, sendSkillSwapRequest);
 router.patch('/:id/accept', protect, acceptSkillSwapRequest);
 router.patch('/:id/reject', protect, rejectSkillSwapRequest);
+router.patch('/:id/complete', protect, completeSkillSwapRequest);
 
 module.exports = router;

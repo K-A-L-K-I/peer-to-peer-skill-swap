@@ -34,8 +34,8 @@ const registerUser = async (req, res) => {
     // Validate email domain
     const emailCheck = isAuthorizedEmail(email);
     if (!emailCheck.valid) {
-      return res.status(400).json({ 
-        message: `Email not authorized: ${emailCheck.reason}` 
+      return res.status(400).json({
+        message: `Email not authorized: ${emailCheck.reason}`
       });
     }
 
@@ -170,8 +170,8 @@ const verifyEmail = async (req, res) => {
     });
 
     if (!user) {
-      return res.status(400).json({ 
-        message: 'Invalid or expired verification token. Please request a new one.' 
+      return res.status(400).json({
+        message: 'Invalid or expired verification token. Please request a new one.'
       });
     }
 
@@ -296,16 +296,16 @@ const loginUser = async (req, res) => {
     // Check if email is verified
     if (!user.isEmailVerified) {
       const isLegacyUser = user.emailVerificationToken || user.emailVerificationExpire;
-      
+
       if (isLegacyUser) {
-        return res.status(403).json({ 
+        return res.status(403).json({
           message: 'Please verify your email before logging in. Check your inbox or request a new verification email.',
           needsVerification: true,
           verificationType: 'legacy',
           email: user.email
         });
       } else {
-        return res.status(403).json({ 
+        return res.status(403).json({
           message: 'Account verification incomplete. Please contact support.',
           needsVerification: true,
           verificationType: 'unknown',
@@ -333,6 +333,12 @@ const loginUser = async (req, res) => {
         isBlocked: user.isBlocked,
         isEmailVerified: user.isEmailVerified,
         profilePicture: user.profilePicture,
+        coverImage: user.coverImage,
+        bio: user.bio,
+        location: user.location,
+        timezone: user.timezone,
+        availableForSwap: user.availableForSwap,
+        socialLinks: user.socialLinks,
         skillsOffered: user.skillsOffered,
         skillsWanted: user.skillsWanted
       }
@@ -440,8 +446,8 @@ const resetPassword = async (req, res) => {
     });
 
     if (!user) {
-      return res.status(400).json({ 
-        message: 'Invalid or expired reset token. Please request a new one.' 
+      return res.status(400).json({
+        message: 'Invalid or expired reset token. Please request a new one.'
       });
     }
 
@@ -472,48 +478,52 @@ const getUserProfile = async (req, res) => {
 
 const updateUserProfile = async (req, res) => {
   try {
-    const { name, email, password, skillsOffered, skillsWanted, profilePicture } = req.body;
+    const {
+      name, email, password, skillsOffered, skillsWanted, profilePicture,
+      bio, location, timezone, availableForSwap, coverImage, socialLinks
+    } = req.body;
 
     const user = await User.findById(req.user._id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
 
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    // If changing email, verify new email is authorized
+    // Email change guard
     if (email && email.toLowerCase() !== user.email) {
       const emailCheck = isAuthorizedEmail(email);
       if (!emailCheck.valid) {
-        return res.status(400).json({ 
-          message: `Email not authorized: ${emailCheck.reason}` 
-        });
+        return res.status(400).json({ message: `Email not authorized: ${emailCheck.reason}` });
       }
-      
       const existingEmail = await User.findOne({ email: email.toLowerCase() });
-      if (existingEmail) {
-        return res.status(400).json({ message: 'Email already in use' });
-      }
-      
-      // Reset verification for new email
+      if (existingEmail) return res.status(400).json({ message: 'Email already in use' });
       user.isEmailVerified = false;
     }
 
-    // Validate profile picture size
     if (profilePicture && profilePicture.length > MAX_FILE_SIZE * 1.4) {
       return res.status(400).json({ message: 'Profile picture too large. Max 2MB.' });
     }
+    if (coverImage && coverImage.length > MAX_FILE_SIZE * 1.4) {
+      return res.status(400).json({ message: 'Cover image too large. Max 2MB.' });
+    }
 
+    // Core fields
     user.name = name || user.name;
     user.email = email ? email.toLowerCase() : user.email;
     user.skillsOffered = Array.isArray(skillsOffered) ? skillsOffered : user.skillsOffered;
     user.skillsWanted = Array.isArray(skillsWanted) ? skillsWanted : user.skillsWanted;
+    if (profilePicture !== undefined) user.profilePicture = profilePicture;
+    if (password) user.password = password;
 
-    if (profilePicture !== undefined) {
-      user.profilePicture = profilePicture;
-    }
-
-    if (password) {
-      user.password = password;
+    // New profile fields
+    if (bio !== undefined) user.bio = bio.slice(0, 300);
+    if (location !== undefined) user.location = location;
+    if (timezone !== undefined) user.timezone = timezone;
+    if (availableForSwap !== undefined) user.availableForSwap = availableForSwap;
+    if (coverImage !== undefined) user.coverImage = coverImage;
+    if (socialLinks !== undefined) {
+      user.socialLinks = {
+        github: socialLinks.github || '',
+        linkedin: socialLinks.linkedin || '',
+        portfolio: socialLinks.portfolio || ''
+      };
     }
 
     const updatedUser = await user.save();
@@ -528,6 +538,12 @@ const updateUserProfile = async (req, res) => {
         isBlocked: updatedUser.isBlocked,
         isEmailVerified: updatedUser.isEmailVerified,
         profilePicture: updatedUser.profilePicture,
+        coverImage: updatedUser.coverImage,
+        bio: updatedUser.bio,
+        location: updatedUser.location,
+        timezone: updatedUser.timezone,
+        availableForSwap: updatedUser.availableForSwap,
+        socialLinks: updatedUser.socialLinks,
         skillsOffered: updatedUser.skillsOffered,
         skillsWanted: updatedUser.skillsWanted
       }

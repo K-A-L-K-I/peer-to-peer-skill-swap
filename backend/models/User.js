@@ -24,6 +24,32 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: null
     },
+    coverImage: {
+      type: String,
+      default: null
+    },
+    bio: {
+      type: String,
+      default: '',
+      maxlength: 300
+    },
+    location: {
+      type: String,
+      default: ''
+    },
+    timezone: {
+      type: String,
+      default: ''
+    },
+    availableForSwap: {
+      type: Boolean,
+      default: true
+    },
+    socialLinks: {
+      github: { type: String, default: '' },
+      linkedin: { type: String, default: '' },
+      portfolio: { type: String, default: '' }
+    },
     skillsOffered: {
       type: [String],
       default: []

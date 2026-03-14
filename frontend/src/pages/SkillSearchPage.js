@@ -1,32 +1,12 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import useAuthStore from '../store/authStore';
 import SkillPicker from '../components/SkillPicker';
+import ReportModal from '../components/ReportModal';
+import KebabMenu from '../components/KebabMenu';
+import { AlertTriangle, Lightbulb, Target, Handshake, Star, Download, Upload, MessageCircle } from 'lucide-react';
 
-// Animated counter hook
-const useAnimatedCounter = (target, duration = 1000) => {
-  const [count, setCount] = useState(0);
-
-  const animate = useCallback(() => {
-    const start = 0;
-    const increment = target / (duration / 16);
-    let current = start;
-
-    const timer = setInterval(() => {
-      current += increment;
-      if (current >= target) {
-        setCount(target);
-        clearInterval(timer);
-      } else {
-        setCount(Math.floor(current));
-      }
-    }, 16);
-
-    return () => clearInterval(timer);
-  }, [target, duration]);
-
-  return [count, animate];
-};
 
 function SkillSearchPage() {
   const navigate = useNavigate();
@@ -37,6 +17,10 @@ function SkillSearchPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [isAnimating, setIsAnimating] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(null);
+  const [reportSuccess, setReportSuccess] = useState('');
+
+  const onlineUsers = useAuthStore(state => state.onlineUsers);
 
   const handleFindMatches = async () => {
     if (skillsOffered.length === 0 && skillsWanted.length === 0) {
@@ -321,7 +305,7 @@ function SkillSearchPage() {
         {/* Error Toast */}
         {error && (
           <div className="error-toast" onClick={() => setError('')}>
-            <span className="error-icon">⚠️</span>
+            <span className="error-icon" style={{ display: 'flex' }}><AlertTriangle size={20} /></span>
             <span>{error}</span>
           </div>
         )}
@@ -329,15 +313,15 @@ function SkillSearchPage() {
         {/* Tips Section */}
         <div className="tips-section">
           <div className="tip-card">
-            <span className="tip-icon">💡</span>
+            <span className="tip-icon" style={{ display: 'flex' }}><Lightbulb size={24} color="#eab308" /></span>
             <span className="tip-text">Select 3-5 skills for best results</span>
           </div>
           <div className="tip-card">
-            <span className="tip-icon">🎯</span>
+            <span className="tip-icon" style={{ display: 'flex' }}><Target size={24} color="#ef4444" /></span>
             <span className="tip-text">Perfect matches teach you what you want</span>
           </div>
           <div className="tip-card">
-            <span className="tip-icon">🤝</span>
+            <span className="tip-icon" style={{ display: 'flex' }}><Handshake size={24} color="#3b82f6" /></span>
             <span className="tip-text">Both parties must have complementary skills</span>
           </div>
         </div>
@@ -1099,39 +1083,55 @@ function SkillSearchPage() {
                 </div>
               </div>
 
+              {/* Report Menu (Top Left or Right depending on preference, left for now) */}
+              <div style={{ position: 'absolute', top: '1.5rem', left: '1.5rem', zIndex: 10 }}>
+                <KebabMenu
+                  actions={[
+                    {
+                      label: 'Report User',
+                      icon: '⚠️',
+                      destructive: true,
+                      onClick: () => setShowReportModal(user)
+                    }
+                  ]}
+                />
+              </div>
+
               {/* Perfect Match Ribbon */}
               {user.isPerfectMatch && (
                 <div className="perfect-ribbon">
-                  <span>⭐ Perfect Match</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}><Star size={14} color="#eab308" fill="currentColor" /> Perfect Match</span>
                 </div>
               )}
 
               {/* User Header */}
-              <div className="user-header">
-                <div className="avatar-container">
-                  {user.profilePicture ? (
-                    <img src={user.profilePicture} alt={user.name} className="user-avatar" />
-                  ) : (
-                    <div className="avatar-placeholder" style={{ background: `linear-gradient(135deg, ${stringToColor(user.name)} 0%, ${stringToColor(user.name + '1')} 100%)` }}>
-                      {getInitials(user.name)}
-                    </div>
-                  )}
-                  <div className={`status-dot ${user.isOnline ? 'online' : 'offline'}`}></div>
-                </div>
+              <div className="user-header" style={{ alignItems: 'flex-start', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', gap: '1rem', flex: 1, minWidth: 0 }}>
+                  <div className="avatar-container">
+                    {user.profilePicture ? (
+                      <img src={user.profilePicture} alt={user.name} className="user-avatar" />
+                    ) : (
+                      <div className="avatar-placeholder" style={{ background: `linear-gradient(135deg, ${stringToColor(user.name)} 0%, ${stringToColor(user.name + '1')} 100%)` }}>
+                        {getInitials(user.name)}
+                      </div>
+                    )}
+                    <div className={`status-dot ${onlineUsers.includes(String(user._id)) ? 'online' : 'offline'}`}></div>
+                  </div>
 
-                <div className="user-info">
-                  <h3 className="user-name">{user.name}</h3>
-                  <p className="user-email">{user.email}</p>
-                  <div className="match-tags">
-                    {user.isPerfectMatch && (
-                      <span className="tag perfect-tag">Mutual Exchange</span>
-                    )}
-                    {user.canTeachMe.length > 0 && (
-                      <span className="tag teach-tag">Can Teach You</span>
-                    )}
-                    {user.canTeachThem.length > 0 && (
-                      <span className="tag learn-tag">Wants to Learn</span>
-                    )}
+                  <div className="user-info">
+                    <h3 className="user-name">{user.name}</h3>
+                    <p className="user-email">{user.email}</p>
+                    <div className="match-tags">
+                      {user.isPerfectMatch && (
+                        <span className="tag perfect-tag">Mutual Exchange</span>
+                      )}
+                      {user.canTeachMe.length > 0 && (
+                        <span className="tag teach-tag">Can Teach You</span>
+                      )}
+                      {user.canTeachThem.length > 0 && (
+                        <span className="tag learn-tag">Wants to Learn</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1142,7 +1142,7 @@ function SkillSearchPage() {
                 {user.canTeachMe.length > 0 && (
                   <div className="exchange-row incoming">
                     <div className="exchange-direction">
-                      <span className="direction-icon">📥</span>
+                      <span className="direction-icon" style={{ display: 'flex' }}><Download size={14} /></span>
                       <span className="direction-label">They'll teach you</span>
                     </div>
                     <div className="exchange-skills">
@@ -1157,7 +1157,7 @@ function SkillSearchPage() {
                 {user.canTeachThem.length > 0 && (
                   <div className="exchange-row outgoing">
                     <div className="exchange-direction">
-                      <span className="direction-icon">📤</span>
+                      <span className="direction-icon" style={{ display: 'flex' }}><Upload size={14} /></span>
                       <span className="direction-label">You can teach</span>
                     </div>
                     <div className="exchange-skills">
@@ -1174,8 +1174,12 @@ function SkillSearchPage() {
                 className={`connect-button ${user.isPerfectMatch ? 'perfect' : ''}`}
                 onClick={() => goToRequestsPage(user)}
               >
-                <span className="button-text">
-                  {user.isPerfectMatch ? '🤝 Start Exchange' : '💬 Send Request'}
+                <span className="button-text" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  {user.isPerfectMatch ? (
+                    <><Handshake size={18} /> Start Exchange</>
+                  ) : (
+                    <><MessageCircle size={18} /> Send Request</>
+                  )}
                 </span>
                 <svg className="button-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M5 12h14M12 5l7 7-7 7" />
@@ -1185,6 +1189,36 @@ function SkillSearchPage() {
           ))
         )}
       </div>
+
+      {showReportModal && (
+        <ReportModal
+          reportedUser={showReportModal}
+          onClose={() => setShowReportModal(null)}
+          onSuccess={() => {
+            setShowReportModal(null);
+            setReportSuccess('User reported successfully.');
+            setTimeout(() => setReportSuccess(''), 3000);
+          }}
+        />
+      )}
+
+      {reportSuccess && (
+        <div style={{
+          position: 'fixed',
+          bottom: '20px',
+          right: '20px',
+          background: '#10b981',
+          color: 'white',
+          padding: '12px 24px',
+          borderRadius: '8px',
+          boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)',
+          zIndex: 9999,
+          fontWeight: 600,
+          animation: 'slideUp 0.3s ease'
+        }}>
+          {reportSuccess}
+        </div>
+      )}
 
       {/* Results CSS */}
       <style>{`

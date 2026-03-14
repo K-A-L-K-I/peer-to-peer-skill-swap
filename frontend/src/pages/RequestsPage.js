@@ -2,7 +2,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import api from '../services/api';
-import useAuthStore from '../store/authStore';
+import ReviewModal from '../components/ReviewModal';
+import { useToast } from '../context/ToastContext';
+import {
+  Upload, Download, ArrowLeftRight, Clock, CheckCircle2, XCircle,
+  PartyPopper, Star, MessageCircle, CheckCheck, X, Loader2, Quote,
+  Lock, Handshake, Lightbulb, Rocket, Search, AlertTriangle
+} from 'lucide-react';
 
 // Animated counter hook
 const useAnimatedNumber = (target, duration = 600) => {
@@ -27,41 +33,41 @@ const useAnimatedNumber = (target, duration = 600) => {
 };
 
 // Skill badge component
-const SkillBadge = ({ skill, type, size = 'md' }) => {
-  const colors = type === 'offer'
-    ? { bg: '#dbeafe', text: '#1e40af', border: '#93c5fd' }
-    : { bg: '#fce7f3', text: '#9d174d', border: '#f9a8d4' };
-
-  const sizes = {
-    sm: { padding: '4px 10px', fontSize: '0.75rem' },
-    md: { padding: '6px 14px', fontSize: '0.875rem' },
-    lg: { padding: '8px 16px', fontSize: '1rem' }
-  };
+const SkillBadge = ({ skill, type }) => {
+  const isOffer = type === 'offer';
+  const colors = isOffer
+    ? { bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe', iconColor: '#3b82f6' }
+    : { bg: '#fdf2f8', text: '#9d174d', border: '#f9a8d4', iconColor: '#ec4899' };
 
   return (
     <span style={{
       display: 'inline-flex',
       alignItems: 'center',
-      gap: '4px',
+      gap: '6px',
       background: colors.bg,
       color: colors.text,
-      border: `1px solid ${colors.border}`,
+      border: `1.5px solid ${colors.border}`,
       borderRadius: '9999px',
-      fontWeight: 600,
-      ...sizes[size]
+      fontWeight: 700,
+      padding: '5px 12px',
+      fontSize: '0.85rem',
+      letterSpacing: '0.01em'
     }}>
-      {type === 'offer' ? '📤' : '📥'} {skill}
+      {isOffer
+        ? <Upload size={13} color={colors.iconColor} strokeWidth={2.5} />
+        : <Download size={13} color={colors.iconColor} strokeWidth={2.5} />}
+      {skill}
     </span>
   );
 };
 
-// Status badge with animation
+// Status badge with Lucide icons
 const StatusBadge = ({ status }) => {
   const configs = {
-    pending: { color: '#f59e0b', bg: '#fffbeb', icon: '⏳', label: 'Pending' },
-    accepted: { color: '#10b981', bg: '#ecfdf5', icon: '✅', label: 'Accepted' },
-    rejected: { color: '#ef4444', bg: '#fef2f2', icon: '❌', label: 'Declined' },
-    completed: { color: '#8b5cf6', bg: '#f5f3ff', icon: '🎉', label: 'Completed' }
+    pending: { color: '#d97706', bg: '#fef9c3', border: '#fde68a', icon: <Clock size={14} strokeWidth={2.5} />, label: 'Pending' },
+    accepted: { color: '#059669', bg: '#d1fae5', border: '#6ee7b7', icon: <CheckCircle2 size={14} strokeWidth={2.5} />, label: 'Accepted' },
+    rejected: { color: '#dc2626', bg: '#fee2e2', border: '#fca5a5', icon: <XCircle size={14} strokeWidth={2.5} />, label: 'Declined' },
+    completed: { color: '#7c3aed', bg: '#ede9fe', border: '#c4b5fd', icon: <PartyPopper size={14} strokeWidth={2.5} />, label: 'Completed' }
   };
 
   const config = configs[status] || configs.pending;
@@ -70,17 +76,18 @@ const StatusBadge = ({ status }) => {
     <span style={{
       display: 'inline-flex',
       alignItems: 'center',
-      gap: '6px',
-      padding: '6px 14px',
+      gap: '5px',
+      padding: '5px 12px',
       borderRadius: '9999px',
       background: config.bg,
       color: config.color,
-      fontSize: '0.875rem',
-      fontWeight: 600,
-      border: `1px solid ${config.color}20`,
-      animation: 'slideIn 0.3s ease'
+      fontSize: '0.8rem',
+      fontWeight: 700,
+      border: `1.5px solid ${config.border}`,
+      letterSpacing: '0.03em',
+      textTransform: 'uppercase'
     }}>
-      <span style={{ fontSize: '1rem' }}>{config.icon}</span>
+      {config.icon}
       {config.label}
     </span>
   );
@@ -126,126 +133,121 @@ const RequestCard = ({ request, type, onAction, actionLoading }) => {
   const isReceived = type === 'received';
   const otherUser = isReceived ? request.fromUser : request.toUser;
   const navigate = useNavigate();
+  const isPending = request.status === 'pending';
+  const isAccepted = request.status === 'accepted';
+  const isCompleted = request.status === 'completed';
+  const isRejected = request.status === 'rejected';
+
+  // Status-based card accents
+  const cardAccent = isPending
+    ? { border: '#fde68a', topBar: 'linear-gradient(90deg, #f59e0b, #fbbf24)', bgTint: 'rgba(254,243,199,0.35)' }
+    : isAccepted
+      ? { border: '#6ee7b7', topBar: 'linear-gradient(90deg, #10b981, #34d399)', bgTint: 'rgba(209,250,229,0.35)' }
+      : isCompleted
+        ? { border: '#c4b5fd', topBar: 'linear-gradient(90deg, #8b5cf6, #a78bfa)', bgTint: 'rgba(237,233,254,0.35)' }
+        : { border: '#fca5a5', topBar: 'linear-gradient(90deg, #ef4444, #f87171)', bgTint: 'rgba(254,226,226,0.2)' };
 
   const handleCardClick = () => {
-    if (request.status === 'accepted') {
-      navigate('/chat', { state: { swapRequestId: request._id } });
-    }
+    if (isAccepted) navigate('/chat', { state: { swapRequestId: request._id } });
   };
+  const handleComplete = (e) => { e.stopPropagation(); onAction('complete', request._id); };
+  const handleReviewClick = (e) => { e.stopPropagation(); onAction('review', request); };
 
   return (
     <div
       onClick={handleCardClick}
       style={{
-        background: 'white',
+        background: `white`,
+        backgroundImage: `radial-gradient(ellipse at top left, ${cardAccent.bgTint}, transparent 70%)`,
         borderRadius: '20px',
         padding: '1.5rem',
-        boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03)',
-        border: '1px solid #f3f4f6',
-        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-        cursor: request.status === 'accepted' ? 'pointer' : 'default',
+        boxShadow: `0 2px 8px rgba(0,0,0,0.06), 0 0 0 1.5px ${cardAccent.border}`,
+        transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+        cursor: isAccepted ? 'pointer' : 'default',
         position: 'relative',
         overflow: 'hidden',
         animation: 'slideIn 0.4s ease backwards'
       }}
       onMouseEnter={(e) => {
-        if (request.status === 'accepted') {
-          e.currentTarget.style.transform = 'translateY(-4px)';
-          e.currentTarget.style.boxShadow = '0 20px 25px -5px rgba(0,0,0,0.1)';
-        }
+        e.currentTarget.style.transform = 'translateY(-3px)';
+        e.currentTarget.style.boxShadow = `0 12px 28px rgba(0,0,0,0.1), 0 0 0 1.5px ${cardAccent.border}`;
       }}
       onMouseLeave={(e) => {
         e.currentTarget.style.transform = 'translateY(0)';
-        e.currentTarget.style.boxShadow = '0 4px 6px -1px rgba(0,0,0,0.05)';
+        e.currentTarget.style.boxShadow = `0 2px 8px rgba(0,0,0,0.06), 0 0 0 1.5px ${cardAccent.border}`;
       }}
     >
-      {/* Status indicator line */}
+      {/* Gradient top bar */}
       <div style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        height: '4px',
-        background: request.status === 'pending' ? '#f59e0b' :
-          request.status === 'accepted' ? '#10b981' :
-            request.status === 'rejected' ? '#ef4444' : '#8b5cf6'
+        position: 'absolute', top: 0, left: 0, right: 0, height: '3px',
+        background: cardAccent.topBar
       }} />
 
       {/* Header */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: '1.25rem'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{
-            width: '48px',
-            height: '48px',
-            borderRadius: '50%',
-            background: otherUser?.profilePicture
-              ? `url(${otherUser.profilePicture}) center/cover`
-              : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'white',
-            fontWeight: 700,
-            fontSize: '1.25rem',
-            flexShrink: 0
-          }}>
-            {!otherUser?.profilePicture && (otherUser?.name?.charAt(0) || '?')}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
+          {/* Avatar with ring */}
+          <div style={{ position: 'relative' }}>
+            <div style={{
+              width: '48px', height: '48px', borderRadius: '50%',
+              background: otherUser?.profilePicture
+                ? `url(${otherUser.profilePicture}) center/cover`
+                : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: 'white', fontWeight: 700, fontSize: '1.25rem', flexShrink: 0,
+              boxShadow: `0 0 0 3px white, 0 0 0 4.5px ${cardAccent.border}`
+            }}>
+              {!otherUser?.profilePicture && (otherUser?.name?.charAt(0) || '?')}
+            </div>
+            {/* Pending pulse dot */}
+            {isPending && isReceived && (
+              <span style={{
+                position: 'absolute', top: '-2px', right: '-2px',
+                width: '14px', height: '14px', borderRadius: '50%',
+                background: '#f59e0b', border: '2px solid white',
+                animation: 'pulse 2s cubic-bezier(0.4,0,0.6,1) infinite'
+              }} />
+            )}
           </div>
           <div>
-            <h4 style={{ margin: '0 0 0.25rem 0', fontSize: '1.125rem', fontWeight: 700, color: '#1f2937' }}>
+            <h4 style={{ margin: '0 0 0.2rem 0', fontSize: '1rem', fontWeight: 700, color: '#111827' }}>
               {otherUser?.name || 'Unknown User'}
             </h4>
-            <p style={{ margin: 0, fontSize: '0.875rem', color: '#6b7280' }}>
-              {isReceived ? 'Wants to swap with you' : 'Request sent'}
+            <p style={{ margin: 0, fontSize: '0.8rem', color: '#6b7280', display: 'flex', alignItems: 'center', gap: '4px' }}>
+              {isReceived
+                ? <><MessageCircle size={12} /> Wants to swap with you</>
+                : <><Upload size={12} /> You sent this request</>}
             </p>
           </div>
         </div>
         <StatusBadge status={request.status} />
       </div>
 
-      {/* Skill Exchange Visualization */}
+      {/* Skill Exchange */}
       <div style={{
-        background: '#f9fafb',
-        borderRadius: '16px',
-        padding: '1.25rem',
-        marginBottom: '1.25rem'
+        background: 'rgba(249,250,251,0.8)', borderRadius: '14px',
+        padding: '1.1rem', marginBottom: '1.1rem',
+        border: '1px solid rgba(0,0,0,0.05)'
       }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '1rem',
-          flexWrap: 'wrap'
-        }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'flex-start' }}>
-            <span style={{ fontSize: '0.75rem', color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+            <span style={{ fontSize: '0.7rem', color: '#9ca3af', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
               {isReceived ? 'They offer' : 'You offer'}
             </span>
             <SkillBadge skill={request.offeredSkill} type="offer" />
           </div>
 
           <div style={{
-            width: '40px',
-            height: '40px',
-            borderRadius: '50%',
-            background: 'white',
-            border: '2px solid #e5e7eb',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '1.25rem',
-            flexShrink: 0
+            width: '34px', height: '34px', borderRadius: '50%',
+            background: 'white', border: '1.5px solid #e5e7eb',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0, boxShadow: '0 1px 3px rgba(0,0,0,0.08)'
           }}>
-            ⇄
+            <ArrowLeftRight size={15} color="#6b7280" strokeWidth={2} />
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', alignItems: 'flex-end' }}>
-            <span style={{ fontSize: '0.75rem', color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', alignItems: 'flex-end' }}>
+            <span style={{ fontSize: '0.7rem', color: '#9ca3af', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
               {isReceived ? 'They want' : 'You want'}
             </span>
             <SkillBadge skill={request.wantedSkill} type="want" />
@@ -254,124 +256,138 @@ const RequestCard = ({ request, type, onAction, actionLoading }) => {
 
         {request.message && (
           <div style={{
-            marginTop: '1rem',
-            padding: '0.75rem 1rem',
+            marginTop: '0.875rem',
+            padding: '0.7rem 0.875rem',
             background: 'white',
-            borderRadius: '12px',
-            borderLeft: '3px solid #667eea',
-            fontSize: '0.875rem',
-            color: '#4b5563',
-            fontStyle: 'italic'
+            borderRadius: '10px',
+            border: '1px solid #e5e7eb',
+            display: 'flex',
+            gap: '0.5rem',
+            alignItems: 'flex-start'
           }}>
-            "{request.message}"
+            <Quote size={14} color="#667eea" style={{ flexShrink: 0, marginTop: '2px' }} />
+            <span style={{ fontSize: '0.85rem', color: '#4b5563', fontStyle: 'italic', lineHeight: 1.5 }}>
+              {request.message}
+            </span>
           </div>
         )}
       </div>
 
-      {/* Actions */}
-      {request.status === 'pending' && isReceived && (
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
+      {/* ─── Actions ─── */}
+      {/* Pending: Accept / Decline */}
+      {isPending && isReceived && (
+        <div style={{ display: 'flex', gap: '0.625rem' }}>
           <button
             onClick={(e) => { e.stopPropagation(); onAction('accept', request._id); }}
             disabled={actionLoading[request._id]}
             style={{
-              flex: 1,
-              padding: '0.75rem 1.5rem',
-              borderRadius: '12px',
-              border: 'none',
+              flex: 1, padding: '0.7rem 1rem', borderRadius: '12px', border: 'none',
               background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-              color: 'white',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.5rem',
-              transition: 'all 0.2s',
-              boxShadow: '0 4px 14px rgba(16, 185, 129, 0.3)'
+              color: 'white', fontWeight: 700, cursor: 'pointer', fontSize: '0.875rem',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+              transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(16,185,129,0.35)'
             }}
-            onMouseEnter={(e) => {
-              if (!actionLoading[request._id]) {
-                e.target.style.transform = 'translateY(-2px)';
-                e.target.style.boxShadow = '0 6px 20px rgba(16, 185, 129, 0.4)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.transform = 'translateY(0)';
-              e.target.style.boxShadow = '0 4px 14px rgba(16, 185, 129, 0.3)';
-            }}
+            onMouseEnter={(e) => { if (!actionLoading[request._id]) { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 18px rgba(16,185,129,0.45)'; } }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(16,185,129,0.35)'; }}
           >
-            {actionLoading[request._id] ? (
-              <span style={{
-                width: '18px',
-                height: '18px',
-                border: '2px solid rgba(255,255,255,0.3)',
-                borderTopColor: 'white',
-                borderRadius: '50%',
-                animation: 'spin 0.8s linear infinite'
-              }} />
-            ) : '✅ Accept'}
+            {actionLoading[request._id]
+              ? <Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite' }} />
+              : <><CheckCheck size={16} /> Accept</>}
           </button>
-
           <button
             onClick={(e) => { e.stopPropagation(); onAction('reject', request._id); }}
             disabled={actionLoading[request._id]}
             style={{
-              flex: 1,
-              padding: '0.75rem 1.5rem',
-              borderRadius: '12px',
-              border: '2px solid #ef4444',
-              background: 'white',
-              color: '#ef4444',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.5rem',
+              flex: 1, padding: '0.7rem 1rem', borderRadius: '12px',
+              border: '2px solid #ef4444', background: 'white', color: '#ef4444',
+              fontWeight: 700, cursor: 'pointer', fontSize: '0.875rem',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
               transition: 'all 0.2s'
             }}
-            onMouseEnter={(e) => {
-              if (!actionLoading[request._id]) {
-                e.target.style.background = '#fef2f2';
-                e.target.style.transform = 'translateY(-2px)';
-              }
-            }}
-            onMouseLeave={(e) => {
-              e.target.style.background = 'white';
-              e.target.style.transform = 'translateY(0)';
-            }}
+            onMouseEnter={(e) => { if (!actionLoading[request._id]) { e.currentTarget.style.background = '#fef2f2'; e.currentTarget.style.transform = 'translateY(-2px)'; } }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'white'; e.currentTarget.style.transform = 'translateY(0)'; }}
           >
-            {actionLoading[request._id] ? (
-              <span style={{
-                width: '18px',
-                height: '18px',
-                border: '2px solid rgba(239,68,68,0.3)',
-                borderTopColor: '#ef4444',
-                borderRadius: '50%',
-                animation: 'spin 0.8s linear infinite'
-              }} />
-            ) : '❌ Decline'}
+            {actionLoading[request._id]
+              ? <Loader2 size={16} color="#ef4444" style={{ animation: 'spin 0.8s linear infinite' }} />
+              : <><X size={16} /> Decline</>}
           </button>
         </div>
       )}
 
-      {request.status === 'accepted' && (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '0.5rem',
-          padding: '0.75rem',
-          background: '#ecfdf5',
-          borderRadius: '12px',
-          color: '#059669',
-          fontWeight: 600,
-          fontSize: '0.875rem'
-        }}>
-          💬 Click to open chat
+      {/* Accepted: Open Chat + Complete */}
+      {isAccepted && (
+        <div style={{ display: 'flex', gap: '0.625rem' }}>
+          <button
+            onClick={(e) => { e.stopPropagation(); navigate('/chat', { state: { swapRequestId: request._id } }); }}
+            style={{
+              flex: 2, padding: '0.7rem 1rem', borderRadius: '12px', border: 'none',
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+              color: 'white', fontWeight: 700, cursor: 'pointer', fontSize: '0.875rem',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+              transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(16,185,129,0.25)'
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 18px rgba(16,185,129,0.35)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(16,185,129,0.25)'; }}
+          >
+            <MessageCircle size={16} /> Open Chat
+          </button>
+          <button
+            onClick={handleComplete}
+            disabled={actionLoading[request._id]}
+            style={{
+              flex: 1, padding: '0.7rem 1rem', borderRadius: '12px', border: 'none',
+              background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)', color: 'white',
+              fontWeight: 700, cursor: 'pointer', fontSize: '0.875rem',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+              transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(139,92,246,0.3)'
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; }}
+          >
+            {actionLoading[request._id]
+              ? <Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite' }} />
+              : <><PartyPopper size={16} /> Complete</>}
+          </button>
         </div>
       )}
+
+      {/* Completed: Leave Review */}
+      {isCompleted && (
+        <button
+          onClick={handleReviewClick}
+          style={{
+            width: '100%', padding: '0.7rem 1rem', borderRadius: '12px',
+            border: '2px solid #f59e0b',
+            background: 'linear-gradient(135deg, #fffbeb 0%, #fef9c3 100%)',
+            color: '#b45309', fontWeight: 700, cursor: 'pointer', fontSize: '0.875rem',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+            transition: 'all 0.2s', boxShadow: '0 4px 12px rgba(245,158,11,0.2)'
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 18px rgba(245,158,11,0.3)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(245,158,11,0.2)'; }}
+        >
+          <Star size={16} fill="#f59e0b" color="#f59e0b" /> Leave a Review
+        </button>
+      )}
+
+      {/* Declined: subtle label */}
+      {isRejected && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+          padding: '0.6rem', borderRadius: '10px', background: '#fef2f2',
+          color: '#dc2626', fontSize: '0.8rem', fontWeight: 600
+        }}>
+          <XCircle size={14} /> This request was declined
+        </div>
+      )}
+
+      {/* Pulse animation */}
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.6; transform: scale(1.3); }
+        }
+      `}</style>
     </div>
   );
 };
@@ -380,7 +396,7 @@ const RequestCard = ({ request, type, onAction, actionLoading }) => {
 function RequestsPage() {
   const navigate = useNavigate();
   const location = useLocation();
-
+  const { addToast } = useToast();
 
   // State
   const [view, setView] = useState('list'); // 'list' | 'send'
@@ -397,6 +413,7 @@ function RequestsPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [profileLoaded, setProfileLoaded] = useState(false);
+  const [reviewModalData, setReviewModalData] = useState(null);
 
   // Animated stats
   const pendingCount = useAnimatedNumber(
@@ -470,7 +487,7 @@ function RequestsPage() {
         wantedSkill: wantedLabel,
         message: sendForm.message
       });
-      setSuccess('Request sent successfully! 🎉');
+      setSuccess('Request sent successfully!');
       setSendForm(prev => ({ ...prev, toUser: '', message: '' }));
       loadRequests();
       setTimeout(() => setView('list'), 1500);
@@ -481,14 +498,32 @@ function RequestsPage() {
     }
   };
 
-  // Handle accept/reject
-  const handleAction = async (action, id) => {
+  const handleAction = async (action, id_or_request) => {
+    if (action === 'review') {
+      const isReceived = requests.received.find(r => r._id === id_or_request._id);
+      const otherUser = isReceived ? id_or_request.fromUser : id_or_request.toUser;
+      setReviewModalData({ swapRequest: id_or_request, reviewedUser: otherUser });
+      return;
+    }
+
+    const id = id_or_request;
     setActionLoading(prev => ({ ...prev, [id]: true }));
     try {
       await api.patch(`/swap-requests/${id}/${action}`);
+      if (action === 'complete') {
+        const isReceived = requests.received.find(r => r._id === id);
+        const reqObj = isReceived || requests.sent.find(r => r._id === id);
+        const otherUser = isReceived ? reqObj.fromUser : reqObj.toUser;
+        addToast('Skill swap completed! You can now leave them a review.', 'success');
+        setReviewModalData({ swapRequest: reqObj, reviewedUser: otherUser });
+      } else if (action === 'accept') {
+        addToast('Request accepted! You can now chat with them.', 'success');
+      } else if (action === 'reject') {
+        addToast('Request declined.', 'info');
+      }
       loadRequests();
     } catch (err) {
-      setError(err.response?.data?.message || `Failed to ${action} request`);
+      addToast(err.response?.data?.message || `Failed to ${action} request`, 'error');
     } finally {
       setActionLoading(prev => ({ ...prev, [id]: false }));
     }
@@ -593,7 +628,7 @@ function RequestsPage() {
               color: pendingCount > 0 ? '#92400e' : '#6b7280',
               fontSize: '0.875rem'
             }}>
-              ⏳ {pendingCount} pending
+              <Clock size={16} /> {pendingCount} pending
             </div>
             <div style={{
               padding: '0.5rem 1rem',
@@ -606,7 +641,7 @@ function RequestsPage() {
               color: totalActive > 0 ? '#065f46' : '#6b7280',
               fontSize: '0.875rem'
             }}>
-              ✅ {totalActive} active
+              <CheckCircle2 size={16} /> {totalActive} active
             </div>
           </div>
 
@@ -646,7 +681,7 @@ function RequestsPage() {
           marginBottom: '1.5rem',
           animation: 'slideIn 0.3s ease'
         }}>
-          <span>⚠️</span>
+          <span style={{ display: 'flex' }}><AlertTriangle size={20} /></span>
           <span style={{ flex: 1 }}>{error}</span>
           <button onClick={() => setError('')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.25rem' }}>×</button>
         </div>
@@ -665,7 +700,7 @@ function RequestsPage() {
           marginBottom: '1.5rem',
           animation: 'slideIn 0.3s ease'
         }}>
-          <span>✅</span>
+          <span style={{ display: 'flex' }}><CheckCircle2 size={20} /></span>
           <span style={{ flex: 1 }}>{success}</span>
           <button onClick={() => setSuccess('')} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.25rem' }}>×</button>
         </div>
@@ -676,7 +711,7 @@ function RequestsPage() {
         <div style={{ animation: 'fadeInUp 0.4s ease' }}>
           {!canSend ? (
             <EmptyState
-              icon="🔒"
+              icon={<Lock size={48} color="#9ca3af" />}
               title="Complete Your Profile"
               subtitle="Add skills you can teach and want to learn to start swapping"
               action={
@@ -717,7 +752,7 @@ function RequestsPage() {
                   fontSize: '2.5rem',
                   margin: '0 auto 1rem'
                 }}>
-                  🤝
+                  <Handshake size={40} color="white" />
                 </div>
                 <h2 style={{ margin: '0 0 0.5rem 0', fontSize: '1.875rem', color: '#1f2937' }}>
                   Propose a Skill Swap
@@ -751,8 +786,8 @@ function RequestsPage() {
                     onFocus={(e) => e.target.style.borderColor = '#667eea'}
                     onBlur={(e) => e.target.style.borderColor = '#e5e7eb'}
                   />
-                  <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.875rem', color: '#9ca3af' }}>
-                    💡 Tip: Find users in the Search page and click "Send Request"
+                  <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.875rem', color: '#9ca3af', display: 'flex', alignItems: 'center' }}>
+                    <Lightbulb size={14} style={{ marginRight: 4 }} /> Tip: Find users in the Search page and click "Send Request"
                   </p>
                 </div>
 
@@ -909,7 +944,7 @@ function RequestsPage() {
                       borderRadius: '50%',
                       animation: 'spin 0.8s linear infinite'
                     }} />
-                  ) : '🚀 Send Request'}
+                  ) : <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}><Rocket size={18} /> Send Request</span>}
                 </button>
               </form>
             </div>
@@ -922,7 +957,7 @@ function RequestsPage() {
         <div style={{ animation: 'fadeInUp 0.4s ease' }}>
           {sortedRequests.length === 0 ? (
             <EmptyState
-              icon="📭"
+              icon={<MessageCircle size={48} color="#9ca3af" />}
               title="No Requests Yet"
               subtitle="Start by finding users to swap skills with in the Search page"
               action={
@@ -941,7 +976,7 @@ function RequestsPage() {
                     gap: '0.5rem'
                   }}
                 >
-                  🔍 Find Users
+                  <Search size={18} /> Find Users
                 </button>
               }
             />
@@ -963,6 +998,19 @@ function RequestsPage() {
             </div>
           )}
         </div>
+      )}
+
+      {reviewModalData && (
+        <ReviewModal
+          swapRequest={reviewModalData.swapRequest}
+          reviewedUser={reviewModalData.reviewedUser}
+          onClose={() => setReviewModalData(null)}
+          onSuccess={() => {
+            setReviewModalData(null);
+            setSuccess('Review submitted successfully!');
+            loadRequests();
+          }}
+        />
       )}
     </div>
   );

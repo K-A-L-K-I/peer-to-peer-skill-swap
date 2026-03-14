@@ -1,321 +1,500 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { Users, Ban, AlertTriangle, CheckCircle, RefreshCw, Shield, MessageSquare, X } from 'lucide-react';
 import api from '../services/api';
+import ConfirmDialog from '../components/ConfirmDialog';
+import './AdminDashboard.css';
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+const ACTION_LABELS = {
+  block_user: { label: 'Blocked User', color: '#ef4444', bg: '#fee2e2' },
+  unblock_user: { label: 'Unblocked User', color: '#10b981', bg: '#d1fae5' },
+  resolve_report: { label: 'Resolved Report', color: '#8b5cf6', bg: '#ede9fe' },
+  reject_report: { label: 'Rejected Report', color: '#6b7280', bg: '#f3f4f6' },
+  review_report: { label: 'Marked In Review', color: '#f59e0b', bg: '#fef9c3' },
+  delete_user: { label: 'Deleted User', color: '#dc2626', bg: '#fef2f2' },
+};
+
+function timeAgo(date) {
+  const secs = Math.floor((Date.now() - new Date(date)) / 1000);
+  if (secs < 60) return `${secs}s ago`;
+  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
+  if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
+  return new Date(date).toLocaleDateString();
+}
+
+// ─── Component ───────────────────────────────────────────────────────────────
 function AdminDashboardPage() {
-  const [activeSection, setActiveSection] = useState('users');
+  const [activeTab, setActiveTab] = useState('users');
   const [users, setUsers] = useState([]);
   const [reports, setReports] = useState([]);
-  const [reportForm, setReportForm] = useState({ reportId: '', status: 'in_review', resolutionNote: '' });
-  const [loading, setLoading] = useState(false);
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState({});
-  const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
 
-  const loadUsers = async () => {
+  // Report inline action
+  const [reportActionData, setReportActionData] = useState({ id: null, status: 'resolved', note: '' });
+
+  // Confirmation dialog state
+  const [confirm, setConfirm] = useState({
+    isOpen: false, title: '', message: '', confirmText: 'Confirm', variant: 'danger', onConfirm: null
+  });
+
+  // Conversation viewer modal state
+  const [convModal, setConvModal] = useState({ open: false, messages: [], loading: false, reporter: null, reported: null });
+
+  const closeConfirm = () => setConfirm(c => ({ ...c, isOpen: false, onConfirm: null }));
+
+  // ── Data fetching ──────────────────────────────────────────────────────────
+  const fetchDashboardData = useCallback(async () => {
     setLoading(true);
     setError('');
-    setMessage('');
     try {
-      const { data } = await api.get('/admin/users');
-      setUsers(data.users || []);
-      setActiveSection('users');
+      const [usersRes, reportsRes, auditRes] = await Promise.all([
+        api.get('/admin/users'),
+        api.get('/admin/reports'),
+        api.get('/admin/audit-logs?limit=50')
+      ]);
+      setUsers(usersRes.data.users || []);
+      setReports(reportsRes.data.reports || []);
+      setAuditLogs(auditRes.data.logs || []);
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load users');
+      setError(err.response?.data?.message || 'Failed to load dashboard data');
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => { fetchDashboardData(); }, [fetchDashboardData]);
+
+  const showMsg = (msg, isErr = false) => {
+    if (isErr) setError(msg); else setMessage(msg);
+    setTimeout(() => { setError(''); setMessage(''); }, 3500);
   };
 
-  const loadReports = async () => {
-    setLoading(true);
-    setError('');
-    setMessage('');
+  // ── Actions ────────────────────────────────────────────────────────────────
+  const toggleBlock = (userId, shouldBlock, userName) => {
+    setConfirm({
+      isOpen: true,
+      title: shouldBlock ? `Block ${userName}?` : `Unblock ${userName}?`,
+      message: shouldBlock
+        ? `This will prevent ${userName} from logging in or using the platform. You can reverse this at any time.`
+        : `${userName} will regain full access to the platform.`,
+      confirmText: shouldBlock ? 'Yes, Block' : 'Yes, Unblock',
+      variant: shouldBlock ? 'danger' : 'warning',
+      onConfirm: async () => {
+        closeConfirm();
+        setActionLoading(prev => ({ ...prev, [userId]: true }));
+        try {
+          await api.patch(`/admin/users/${userId}/${shouldBlock ? 'block' : 'unblock'}`);
+          showMsg(`User ${shouldBlock ? 'blocked' : 'unblocked'} successfully`);
+          await fetchDashboardData();
+        } catch (err) {
+          showMsg(err.response?.data?.message || 'Failed to update user status', true);
+        } finally {
+          setActionLoading(prev => ({ ...prev, [userId]: false }));
+        }
+      }
+    });
+  };
+
+  const submitReportAction = async (reportId) => {
+    const { status, note } = reportActionData;
+    if (!status) return;
+    setActionLoading(prev => ({ ...prev, [reportId]: true }));
     try {
-      const { data } = await api.get('/admin/reports');
-      setReports(data.reports || []);
-      setActiveSection('reports');
+      await api.patch(`/admin/reports/${reportId}/action`, { status, resolutionNote: note });
+      showMsg('Report updated successfully');
+      setReportActionData({ id: null, status: 'resolved', note: '' });
+      await fetchDashboardData();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load reports');
+      showMsg(err.response?.data?.message || 'Failed to update report', true);
     } finally {
-      setLoading(false);
+      setActionLoading(prev => ({ ...prev, [reportId]: false }));
     }
   };
 
-  const toggleBlock = async (userId, shouldBlock) => {
-    setActionLoading(prev => ({ ...prev, [userId]: true }));
-    setMessage('');
-    setError('');
-
+  const fetchConversation = async (report) => {
+    const u1 = report.reportedBy?._id || report.reportedBy;
+    const u2 = report.reportedUser?._id || report.reportedUser;
+    if (!u1 || !u2) return;
+    setConvModal({ open: true, messages: [], loading: true, reporter: report.reportedBy, reported: report.reportedUser });
     try {
-      await api.patch(`/admin/users/${userId}/${shouldBlock ? 'block' : 'unblock'}`);
-      setMessage(`User ${shouldBlock ? 'blocked' : 'unblocked'} successfully`);
-      await loadUsers();
+      const { data } = await api.get(`/admin/conversation/${u1}/${u2}`);
+      setConvModal(prev => ({ ...prev, loading: false, messages: data.messages || [] }));
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to update user status');
-    } finally {
-      setActionLoading(prev => ({ ...prev, [userId]: false }));
+      setConvModal(prev => ({ ...prev, loading: false }));
+      showMsg('Failed to load conversation', true);
     }
   };
 
-  const handleReportAction = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setMessage('');
-    setError('');
-
-    try {
-      await api.patch(`/admin/reports/${reportForm.reportId}/action`, {
-        status: reportForm.status,
-        resolutionNote: reportForm.resolutionNote
-      });
-      setMessage('Report action submitted successfully');
-      setReportForm({ reportId: '', status: 'in_review', resolutionNote: '' });
-      await loadReports();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to update report');
-    } finally {
-      setLoading(false);
-    }
+  // ── Stats ──────────────────────────────────────────────────────────────────
+  const stats = {
+    totalUsers: users.length,
+    blockedUsers: users.filter(u => u.isBlocked).length,
+    activeReports: reports.filter(r => r.status === 'pending' || r.status === 'in_review').length,
+    resolvedReports: reports.filter(r => r.status === 'resolved').length,
   };
 
-  const getStatusBadge = (status) => {
-    const statusMap = {
-      'pending': 'status-pending',
-      'in_review': 'status-pending',
-      'resolved': 'status-accepted',
-      'rejected': 'status-rejected',
-      'active': 'status-accepted',
-      'blocked': 'status-rejected'
-    };
-    return statusMap[status] || 'status-pending';
-  };
+  const statCards = [
+    { label: 'Total Users', value: stats.totalUsers, icon: <Users size={22} />, cls: 'users' },
+    { label: 'Blocked Users', value: stats.blockedUsers, icon: <Ban size={22} />, cls: 'blocked' },
+    { label: 'Active Reports', value: stats.activeReports, icon: <AlertTriangle size={22} />, cls: 'warning' },
+    { label: 'Resolved', value: stats.resolvedReports, icon: <CheckCircle size={22} />, cls: 'success' },
+  ];
 
+  // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div>
-      <div className="page-header">
-        <h1 className="page-title">Admin Dashboard</h1>
-        <p className="page-subtitle">Manage users and moderate reports</p>
-      </div>
+    <div className="admin-dashboard">
+      {/* Confirmation modal */}
+      <ConfirmDialog
+        isOpen={confirm.isOpen}
+        title={confirm.title}
+        message={confirm.message}
+        confirmText={confirm.confirmText}
+        variant={confirm.variant}
+        onConfirm={confirm.onConfirm}
+        onCancel={closeConfirm}
+      />
 
-      {/* Action Bar */}
-      <div className="card" style={{ marginBottom: '1.5rem' }}>
-        <div className="card-body" style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
-          <button 
-            type="button" 
-            className={`btn ${activeSection === 'users' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={loadUsers}
-            disabled={loading}
-          >
-            {loading && activeSection !== 'users' ? (
-              <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }}></span>
-            ) : (
-              '👥 Manage Users'
-            )}
-          </button>
-          <button 
-            type="button" 
-            className={`btn ${activeSection === 'reports' ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={loadReports}
-            disabled={loading}
-          >
-            {loading && activeSection !== 'reports' ? (
-              <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }}></span>
-            ) : (
-              '📋 View Reports'
-            )}
-          </button>
-        </div>
-      </div>
-
-      {error && (
-        <div className="alert alert-error">
-          <span>⚠</span>
-          {error}
-        </div>
-      )}
-
-      {message && (
-        <div className="alert alert-success">
-          <span>✓</span>
-          {message}
-        </div>
-      )}
-
-      {/* Users Section */}
-      {activeSection === 'users' && (
+      {/* Header */}
+      <div className="admin-header">
         <div>
-          <h3 style={{ marginBottom: '1rem', fontSize: '1.125rem', fontWeight: '600' }}>
-            All Users ({users.length})
-          </h3>
-          
-          {users.length === 0 ? (
-            <div className="card">
-              <div className="empty-state">
-                <div className="empty-state-icon">👥</div>
-                <h3>No users loaded</h3>
-                <p>Click "Manage Users" to load the user list</p>
-              </div>
+          <h1 className="admin-title">Admin Dashboard</h1>
+          <p className="admin-subtitle">Platform overview and user moderation</p>
+        </div>
+        <button className="btn btn-secondary" onClick={fetchDashboardData} disabled={loading}>
+          <RefreshCw size={15} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
+          {loading ? 'Refreshing…' : 'Refresh'}
+        </button>
+      </div>
+
+      {error && <div className="admin-alert error">{error}</div>}
+      {message && <div className="admin-alert success">{message}</div>}
+
+      {/* Stats Grid */}
+      <div className="stats-grid">
+        {statCards.map(s => (
+          <div key={s.label} className="stat-card">
+            <div className={`stat-icon ${s.cls}`}>{s.icon}</div>
+            <div className="stat-content">
+              <h3>{s.label}</h3>
+              <p className="stat-value">{s.value}</p>
             </div>
-          ) : (
-            <div className="list-grid">
-              {users.map((user) => (
-                <div key={user._id} className="card">
-                  <div className="card-body">
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
-                      <div>
-                        <h4 style={{ margin: '0 0 0.25rem 0' }}>{user.name}</h4>
-                        <p style={{ margin: 0, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>{user.email}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Tabs */}
+      <div className="admin-content-card">
+        <div className="admin-tabs">
+          {[
+            { key: 'users', label: 'Manage Users' },
+            { key: 'reports', label: 'Reports' },
+            { key: 'audit', label: 'Audit Log' },
+          ].map(t => (
+            <button
+              key={t.key}
+              className={`admin-tab ${activeTab === t.key ? 'active' : ''}`}
+              onClick={() => setActiveTab(t.key)}
+            >
+              {t.label}
+              {t.key === 'audit' && auditLogs.length > 0 && (
+                <span style={{
+                  marginLeft: '6px', background: '#667eea', color: 'white',
+                  fontSize: '0.7rem', borderRadius: '9999px', padding: '1px 7px', fontWeight: 700
+                }}>
+                  {auditLogs.length}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* ── Users Table ─────────────────────────────────────────────────── */}
+        {activeTab === 'users' && (
+          <div className="table-responsive">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Role</th>
+                  <th>Joined</th>
+                  <th>Status</th>
+                  <th className="text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.length === 0 ? (
+                  <tr><td colSpan="5" className="empty-row">No users found.</td></tr>
+                ) : users.map(user => (
+                  <tr key={user._id}>
+                    <td>
+                      <div className="cell-user">
+                        <div className="cell-avatar">{user.name.charAt(0).toUpperCase()}</div>
+                        <div>
+                          <div className="cell-name">{user.name}</div>
+                          <div className="cell-sub">{user.email}</div>
+                        </div>
                       </div>
-                      <span className={`status-badge ${user.isBlocked ? 'status-rejected' : 'status-accepted'}`}>
+                    </td>
+                    <td><span className={`role-badge ${user.role}`}>{user.role}</span></td>
+                    <td className="cell-date">{new Date(user.createdAt).toLocaleDateString()}</td>
+                    <td>
+                      <span className={`status-pill ${user.isBlocked ? 'blocked' : 'active'}`}>
                         {user.isBlocked ? 'Blocked' : 'Active'}
                       </span>
-                    </div>
-                    
-                    <div style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-                      Role: <strong>{user.role}</strong> • Joined: {new Date(user.createdAt).toLocaleDateString()}
-                    </div>
+                    </td>
+                    <td className="text-right">
+                      {user.role !== 'admin' && (
+                        <button
+                          className={`btn-action ${user.isBlocked ? 'unblock' : 'block'}`}
+                          onClick={() => toggleBlock(user._id, !user.isBlocked, user.name)}
+                          disabled={actionLoading[user._id]}
+                        >
+                          {actionLoading[user._id] ? 'Processing…' : (user.isBlocked ? 'Unblock' : 'Block')}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-                    {user.role !== 'admin' && (
-                      <button
-                        type="button"
-                        className={`btn btn-sm ${user.isBlocked ? 'btn-success' : 'btn-danger'}`}
-                        onClick={() => toggleBlock(user._id, !user.isBlocked)}
-                        disabled={actionLoading[user._id]}
-                        style={{ width: '100%' }}
-                      >
-                        {actionLoading[user._id] ? (
-                          <span className="spinner" style={{ width: '14px', height: '14px', borderWidth: '2px' }}></span>
+        {/* ── Reports Table ─────────────────────────────────────────────── */}
+        {activeTab === 'reports' && (
+          <div className="table-responsive">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Report ID</th>
+                  <th>Target User</th>
+                  <th>Reason</th>
+                  <th>Status</th>
+                  <th className="text-right">Quick Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reports.length === 0 ? (
+                  <tr><td colSpan="5" className="empty-row">No reports found.</td></tr>
+                ) : reports.map(report => (
+                  <tr key={report._id}>
+                    <td className="cell-id">#{report._id.slice(-6).toUpperCase()}</td>
+                    <td>
+                      <div className="cell-name">{report.reportedUser?.name || 'Unknown'}</div>
+                      <div className="cell-sub">{report.reportedUser?.email}</div>
+                    </td>
+                    <td>
+                      <div className="cell-reason">{report.reason}</div>
+                      <div className="cell-sub">By: {report.reportedBy?.name || report.reportedBy?.email}</div>
+                    </td>
+                    <td>
+                      <span className={`status-pill ${report.status}`}>
+                        {report.status.replace('_', ' ')}
+                      </span>
+                    </td>
+                    <td className="text-right">
+                      <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+                        {/* View Chat button */}
+                        <button
+                          className="btn-action view-chat"
+                          onClick={() => fetchConversation(report)}
+                          title="View chat between reporter and reported user"
+                          style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+                        >
+                          <MessageSquare size={13} /> Chat
+                        </button>
+
+                        {reportActionData.id === report._id ? (
+                          <div className="action-form-inline">
+                            <select
+                              value={reportActionData.status}
+                              onChange={e => setReportActionData({ ...reportActionData, status: e.target.value })}
+                            >
+                              <option value="in_review">In Review</option>
+                              <option value="resolved">Resolved</option>
+                              <option value="rejected">Rejected</option>
+                            </select>
+                            <button className="btn-action submit" onClick={() => submitReportAction(report._id)} disabled={actionLoading[report._id]}>Save</button>
+                            <button className="btn-action cancel" onClick={() => setReportActionData({ id: null })}>Cancel</button>
+                          </div>
                         ) : (
-                          user.isBlocked ? 'Unblock User' : 'Block User'
+                          <button
+                            className="btn-action edit"
+                            onClick={() => setReportActionData({ id: report._id, status: report.status, note: report.resolutionNote || '' })}
+                          >
+                            Moderate
+                          </button>
                         )}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-      {/* Reports Section */}
-      {activeSection === 'reports' && (
-        <div>
-          <div style={{ display: 'grid', gap: '1.5rem', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))' }}>
-            {/* Reports List */}
-            <div>
-              <h3 style={{ marginBottom: '1rem', fontSize: '1.125rem', fontWeight: '600' }}>
-                Reports ({reports.length})
-              </h3>
-              
-              {reports.length === 0 ? (
-                <div className="card">
-                  <div className="empty-state">
-                    <div className="empty-state-icon">📋</div>
-                    <h3>No reports loaded</h3>
-                    <p>Click "View Reports" to load the reports list</p>
-                  </div>
+        {/* ── Audit Log ────────────────────────────────────────────────────── */}
+        {activeTab === 'audit' && (
+          <div>
+            {auditLogs.length === 0 ? (
+              <div style={{ padding: '3rem', textAlign: 'center', color: '#9ca3af' }}>
+                <Shield size={48} style={{ marginBottom: '1rem', opacity: 0.3 }} />
+                <p style={{ margin: 0, fontSize: '1rem' }}>No admin actions recorded yet.</p>
+              </div>
+            ) : (
+              <div style={{ padding: '0.5rem 0' }}>
+                {auditLogs.map((log, i) => {
+                  const meta = ACTION_LABELS[log.action] || { label: log.action, color: '#6b7280', bg: '#f3f4f6' };
+                  return (
+                    <div
+                      key={log._id}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '1rem',
+                        padding: '1rem 1.5rem',
+                        borderBottom: i < auditLogs.length - 1 ? '1px solid #f3f4f6' : 'none',
+                        transition: 'background 0.15s',
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#fafafa'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      {/* Action badge */}
+                      <span style={{
+                        padding: '4px 10px',
+                        borderRadius: '9999px',
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        background: meta.bg,
+                        color: meta.color,
+                        whiteSpace: 'nowrap',
+                        flexShrink: 0
+                      }}>
+                        {meta.label}
+                      </span>
+
+                      {/* Details */}
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '0.875rem', color: '#374151', fontWeight: 500 }}>
+                          <strong style={{ color: '#7c3aed' }}>{log.admin?.name || 'Admin'}</strong>
+                          {log.targetUser && <> → <strong>{log.targetUser.name}</strong></>}
+                        </div>
+                        {log.note && (
+                          <div style={{ fontSize: '0.8rem', color: '#6b7280', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {log.note}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Time */}
+                      <span style={{ fontSize: '0.75rem', color: '#9ca3af', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                        {timeAgo(log.createdAt)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Conversation Viewer Modal ───────────────────────────────────────── */}
+      {convModal.open && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
+          zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem'
+        }} onClick={() => setConvModal(m => ({ ...m, open: false }))}>
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'white', borderRadius: '20px', width: '100%', maxWidth: 560,
+              maxHeight: '80vh', display: 'flex', flexDirection: 'column',
+              boxShadow: '0 25px 60px rgba(0,0,0,0.25)', overflow: 'hidden'
+            }}
+          >
+            {/* Modal Header */}
+            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid #f3f4f6', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'linear-gradient(135deg,#667eea,#764ba2)', color: 'white' }}>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: '1rem' }}>Chat Evidence Viewer</div>
+                <div style={{ fontSize: '0.8rem', opacity: 0.85, marginTop: '2px' }}>
+                  {convModal.reporter?.name || 'Reporter'} ↔ {convModal.reported?.name || 'Reported'}
+                </div>
+              </div>
+              <button onClick={() => setConvModal(m => ({ ...m, open: false }))} style={{ background: 'rgba(255,255,255,0.2)', border: 'none', borderRadius: '8px', padding: '6px', cursor: 'pointer', color: 'white', display: 'flex' }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Messages */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.625rem', background: '#f8fafc' }}>
+              {convModal.loading ? (
+                <div style={{ textAlign: 'center', padding: '3rem', color: '#9ca3af' }}>
+                  <div style={{ width: 36, height: 36, border: '3px solid #e5e7eb', borderTopColor: '#6366f1', borderRadius: '50%', animation: 'spin 0.8s linear infinite', margin: '0 auto 0.75rem' }} />
+                  Loading messages…
+                </div>
+              ) : convModal.messages.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '3rem', color: '#9ca3af' }}>
+                  <MessageSquare size={40} style={{ marginBottom: '0.75rem', opacity: 0.3 }} />
+                  <p style={{ margin: 0 }}>No messages found between these users.</p>
+                  <p style={{ margin: '0.5rem 0 0', fontSize: '0.8rem' }}>They may have never had a conversation.</p>
                 </div>
               ) : (
-                <div className="list-grid">
-                  {reports.map((report) => (
-                    <div key={report._id} className="card">
-                      <div className="card-body">
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                          <span style={{ fontSize: '0.75rem', fontFamily: 'monospace', color: 'var(--text-muted)' }}>
-                            #{report._id.slice(-8)}
-                          </span>
-                          <span className={`status-badge ${getStatusBadge(report.status)}`}>
-                            {report.status}
-                          </span>
+                convModal.messages.map((msg, idx) => {
+                  const isReporter = msg.sender?._id === (convModal.reporter?._id || convModal.reporter);
+                  const msgDate = new Date(msg.createdAt);
+                  const msgDay = msgDate.toDateString();
+                  const prevDay = idx > 0 ? new Date(convModal.messages[idx - 1].createdAt).toDateString() : null;
+                  const showDateSep = msgDay !== prevDay;
+                  const today = new Date().toDateString();
+                  const yesterday = new Date(Date.now() - 86400000).toDateString();
+                  const dateLabel = msgDay === today ? 'Today'
+                    : msgDay === yesterday ? 'Yesterday'
+                      : msgDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+                  return (
+                    <div key={msg._id}>
+                      {showDateSep && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', margin: '0.875rem 0' }}>
+                          <div style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
+                          <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#9ca3af', background: 'white', padding: '2px 10px', borderRadius: '9999px', border: '1px solid #e5e7eb', whiteSpace: 'nowrap' }}>{dateLabel}</span>
+                          <div style={{ flex: 1, height: 1, background: '#e5e7eb' }} />
                         </div>
-                        
-                        <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.875rem' }}>
-                          <strong>Reason:</strong> {report.reason}
-                        </p>
-                        
-                        <p style={{ margin: '0 0 0.5rem 0', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-                          Reported: {report.reportedUser?.email || 'Unknown'}
-                        </p>
-                        
-                        <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                          By: {report.reportedBy?.email || 'Unknown'} • {new Date(report.createdAt).toLocaleDateString()}
-                        </p>
+                      )}
+                      <div style={{ display: 'flex', flexDirection: isReporter ? 'row' : 'row-reverse', gap: '8px', alignItems: 'flex-end' }}>
+                        <div style={{ width: 28, height: 28, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 800, background: isReporter ? '#ede9fe' : '#fef9c3', color: isReporter ? '#7c3aed' : '#d97706' }}>
+                          {(msg.sender?.name || '?').charAt(0).toUpperCase()}
+                        </div>
+                        <div style={{ maxWidth: '72%' }}>
+                          <div style={{ background: isReporter ? '#6366f1' : 'white', color: isReporter ? 'white' : '#111827', padding: '0.6rem 0.875rem', borderRadius: isReporter ? '16px 16px 4px 16px' : '16px 16px 16px 4px', fontSize: '0.875rem', lineHeight: 1.5, boxShadow: '0 1px 3px rgba(0,0,0,0.08)', border: isReporter ? 'none' : '1px solid #f3f4f6' }}>
+                            {msg.content}
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: '#9ca3af', marginTop: '3px', textAlign: isReporter ? 'left' : 'right', paddingInline: '4px' }}>
+                            {msg.sender?.name} · {msgDate.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  ))}
-                </div>
+                  );
+                })
               )}
             </div>
 
-            {/* Action Form */}
-            <div>
-              <h3 style={{ marginBottom: '1rem', fontSize: '1.125rem', fontWeight: '600' }}>
-                Take Action
-              </h3>
-              
-              <div className="card">
-                <div className="card-body">
-                  <form onSubmit={handleReportAction}>
-                    <div className="form-group">
-                      <label className="form-label form-label-required">Report ID</label>
-                      <input
-                        type="text"
-                        className="form-input"
-                        placeholder="Enter report ID"
-                        value={reportForm.reportId}
-                        onChange={(e) => setReportForm({ ...reportForm, reportId: e.target.value })}
-                        required
-                      />
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label form-label-required">New Status</label>
-                      <select
-                        className="form-select"
-                        value={reportForm.status}
-                        onChange={(e) => setReportForm({ ...reportForm, status: e.target.value })}
-                        required
-                      >
-                        <option value="in_review">In Review</option>
-                        <option value="resolved">Resolved</option>
-                        <option value="rejected">Rejected</option>
-                      </select>
-                    </div>
-
-                    <div className="form-group">
-                      <label className="form-label">Resolution Note</label>
-                      <textarea
-                        className="form-textarea"
-                        rows="3"
-                        placeholder="Add notes about the resolution..."
-                        value={reportForm.resolutionNote}
-                        onChange={(e) => setReportForm({ ...reportForm, resolutionNote: e.target.value })}
-                      />
-                    </div>
-
-                    <button 
-                      type="submit" 
-                      className="btn btn-primary"
-                      disabled={loading}
-                      style={{ width: '100%' }}
-                    >
-                      {loading ? (
-                        <>
-                          <span className="spinner" style={{ width: '16px', height: '16px', borderWidth: '2px' }}></span>
-                          Processing...
-                        </>
-                      ) : (
-                        'Submit Action'
-                      )}
-                    </button>
-                  </form>
-                </div>
-              </div>
+            {/* Legend */}
+            <div style={{ padding: '0.875rem 1.5rem', borderTop: '1px solid #f3f4f6', background: 'white', display: 'flex', gap: '1.5rem', fontSize: '0.78rem', color: '#6b7280' }}>
+              <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#6366f1', marginRight: 5, verticalAlign: 'middle' }} /><b style={{ color: '#374151' }}>{convModal.reporter?.name}</b> (Reporter)</span>
+              <span><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#fef9c3', border: '1px solid #fde68a', marginRight: 5, verticalAlign: 'middle' }} /><b style={{ color: '#374151' }}>{convModal.reported?.name}</b> (Reported)</span>
+              <span style={{ marginLeft: 'auto' }}>{convModal.messages.length} messages</span>
             </div>
           </div>
         </div>
       )}
+
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

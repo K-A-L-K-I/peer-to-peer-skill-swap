@@ -37,6 +37,19 @@ const callHistorySchema = new mongoose.Schema({
     type: String,
     enum: ['video', 'audio'],
     default: 'video'
+  },
+  reportedDuringCall: {
+    type: Boolean,
+    default: false
+  },
+  reportNote: {
+    type: String,
+    default: ''
+  },
+  postCallFeedback: {
+    type: String,
+    enum: ['thumbsUp', 'thumbsDown', null],
+    default: null
   }
 }, {
   timestamps: true

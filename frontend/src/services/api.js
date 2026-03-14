@@ -1,8 +1,8 @@
 import axios from 'axios';
 import socketService from './socketService';
 
-// Always use HTTPS for API calls when on HTTPS site
-const apiUrl = process.env.REACT_APP_API_URL || `https://${window.location.hostname}:5000/api`;
+// Use environment variable for API URL or match current protocol
+const apiUrl = process.env.REACT_APP_API_URL || `${window.location.protocol}//${window.location.hostname}:5000/api`;
 
 const api = axios.create({
   baseURL: apiUrl,

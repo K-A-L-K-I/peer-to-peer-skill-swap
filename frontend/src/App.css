@@ -17,33 +17,43 @@ body,
   overflow-x: hidden;
 }
 
-/* Root layout - true full width */
-.app-modern {
+/* Root layout - flex layout for sidebar */
+.app-modern.layout-sidebar {
+  display: flex;
   min-height: 100vh;
   width: 100%;
   background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+  overflow: hidden;
+  /* Prevents double scrolling */
 }
 
 .main-content {
-  min-height: 100vh;
-  width: 100%;
+  flex: 1;
+  height: 100vh;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 0;
   margin: 0;
+  position: relative;
+  background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
 }
 
-.main-with-nav {
-  padding-top: 72px;
+.main-with-sidebar {
+  padding: 2rem;
   width: 100%;
-  min-height: 100vh;
-  padding-left: 2rem;
-  padding-right: 2rem;
-  padding-bottom: 2rem;
 }
 
-/* Page container - full width */
+@media (max-width: 768px) {
+  .main-with-sidebar {
+    padding: 1rem;
+  }
+}
+
+/* Page container */
 .page-container {
   width: 100%;
-  max-width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
   animation: fadeInUp 0.3s ease-out;
 }
 
