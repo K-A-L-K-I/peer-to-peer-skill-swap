@@ -415,6 +415,11 @@ async function saveCallHistory(callData, duration) {
 // Make io accessible to controllers
 app.set('io', io);
 
+// Health check route for UptimeRobot (Keeps Render backend awake)
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok', message: 'Server is awake' });
+});
+
 // Routes
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/users', require('./routes/userRoutes'));
