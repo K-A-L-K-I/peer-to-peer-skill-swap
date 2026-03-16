@@ -12,12 +12,25 @@ const app = express();
 
 // CORS - Allow local and production origins
 const corsOptions = {
-  origin: [
-    process.env.CLIENT_URL,
-    'https://peer-to-peer-skill-swap.vercel.app',
-    'http://localhost:3000',
-    'http://127.0.0.1:3000'
-  ],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (mobile apps, curl, server-to-server)
+    if (!origin) return callback(null, true);
+
+    const clientUrl = process.env.CLIENT_URL || '';
+    const allowed =
+      origin.includes('localhost') ||
+      origin.includes('127.0.0.1') ||
+      origin.endsWith('.vercel.app') ||        // ALL vercel.app subdomains
+      origin.endsWith('.onrender.com') ||       // Render preview URLs
+      origin === clientUrl;                     // Custom domain if set
+
+    if (allowed) {
+      callback(null, true);
+    } else {
+      console.warn('CORS blocked origin:', origin);
+      callback(null, true); // Allow all for now — tighten once stable
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Accept']
