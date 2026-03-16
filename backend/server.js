@@ -8,6 +8,15 @@ const connectDB = require('./config/db');
 dotenv.config();
 connectDB();
 
+// Add global error handlers to catch silent crashes
+process.on('uncaughtException', (err) => {
+  console.error('CRITICAL: Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('CRITICAL: Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
 const app = express();
 
 // CORS - Allow local and production origins
