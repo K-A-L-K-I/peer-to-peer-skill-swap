@@ -1,8 +1,5 @@
 const express = require('express');
 const http = require('http');
-const https = require('https');
-const fs = require('fs');
-const path = require('path');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const dotenv = require('dotenv');
@@ -31,37 +28,11 @@ app.use(cors(corsOptions));
 // Middleware
 app.use(express.json({ limit: '10mb' }));
 
-// Store active calls in memory
-const activeCalls = new Map();
-const usersInCalls = new Map();
-
-// Check if HTTPS certificates exist
-const sslDir = path.join(__dirname, 'ssl');
-const keyPath = path.join(sslDir, 'key.pem');
-const certPath = path.join(sslDir, 'cert.pem');
-
-let server;
-let isHTTPS = false;
-
-if (process.env.NODE_ENV !== 'production' && fs.existsSync(keyPath) && fs.existsSync(certPath)) {
-  // HTTPS mode (Local development only)
-  const options = {
-    key: fs.readFileSync(keyPath),
-    cert: fs.readFileSync(certPath)
-  };
-  server = https.createServer(options, app);
-  isHTTPS = true;
-  console.log('🔒 HTTPS mode enabled (Local Dev)');
-} else {
-  // HTTP mode (Production on Render OR Local without certs)
-  server = http.createServer(app);
-  if (process.env.NODE_ENV === 'production') {
-    console.log('🌍 Production HTTP mode (HTTPS is handled by Render load balancer)');
-  } else {
-    console.log('⚠️  HTTP mode - Video calls will only work on localhost');
-    console.log('   To enable HTTPS for local network, run: mkdir ssl && openssl req -x509 -newkey rsa:4096 -keyout ssl/key.pem -out ssl/cert.pem -days 365 -nodes');
-  }
-}
+// Always use HTTP — Render (and most cloud platforms) handle HTTPS at the
+// load balancer level. Self-signed SSL certs are only needed for local LAN dev.
+// For local HTTPS: mkdir ssl && openssl req -x509 -newkey rsa:4096 -keyout ssl/key.pem -out ssl/cert.pem -days 365 -nodes
+const server = http.createServer(app);
+console.log('🌍 HTTP server created (HTTPS handled by cloud load balancer)');
 
 // Socket.io configuration
 const io = new Server(server, {
@@ -431,13 +402,6 @@ const PORT = process.env.PORT || 5000;
 const HOST = process.env.HOST || '0.0.0.0';
 
 server.listen(PORT, HOST, () => {
-  const protocol = isHTTPS ? 'https' : 'http';
-  console.log(`🚀 Server running on ${protocol}://${HOST}:${PORT}`);
-  console.log(`📱 For mobile access, use: ${protocol}://YOUR_COMPUTER_IP:${PORT}`);
-  if (!isHTTPS) {
-    console.log(`⚠️  To enable HTTPS for video calls on local network:`);
-    console.log(`   1. mkdir ssl`);
-    console.log(`   2. openssl req -x509 -newkey rsa:4096 -keyout ssl/key.pem -out ssl/cert.pem -days 365 -nodes`);
-    console.log(`   3. Restart server`);
-  }
+  console.log(`🚀 Server running on http://${HOST}:${PORT}`);
+  console.log(`📱 For mobile access, use: http://YOUR_COMPUTER_IP:${PORT}`);
 });
