@@ -43,20 +43,24 @@ const certPath = path.join(sslDir, 'cert.pem');
 let server;
 let isHTTPS = false;
 
-if (fs.existsSync(keyPath) && fs.existsSync(certPath)) {
-  // HTTPS mode
+if (process.env.NODE_ENV !== 'production' && fs.existsSync(keyPath) && fs.existsSync(certPath)) {
+  // HTTPS mode (Local development only)
   const options = {
     key: fs.readFileSync(keyPath),
     cert: fs.readFileSync(certPath)
   };
   server = https.createServer(options, app);
   isHTTPS = true;
-  console.log('🔒 HTTPS mode enabled');
+  console.log('🔒 HTTPS mode enabled (Local Dev)');
 } else {
-  // HTTP mode (for localhost development only)
+  // HTTP mode (Production on Render OR Local without certs)
   server = http.createServer(app);
-  console.log('⚠️  HTTP mode - Video calls will only work on localhost');
-  console.log('   To enable HTTPS for local network, run: mkdir ssl && openssl req -x509 -newkey rsa:4096 -keyout ssl/key.pem -out ssl/cert.pem -days 365 -nodes');
+  if (process.env.NODE_ENV === 'production') {
+    console.log('🌍 Production HTTP mode (HTTPS is handled by Render load balancer)');
+  } else {
+    console.log('⚠️  HTTP mode - Video calls will only work on localhost');
+    console.log('   To enable HTTPS for local network, run: mkdir ssl && openssl req -x509 -newkey rsa:4096 -keyout ssl/key.pem -out ssl/cert.pem -days 365 -nodes');
+  }
 }
 
 // Socket.io configuration
