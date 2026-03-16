@@ -1,8 +1,32 @@
-
-
 const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 
 const sendEmail = async ({ to, subject, text, html }) => {
+  const resendApiKey = process.env.RESEND_API_KEY;
+
+  // --- Use Resend API (Production / Render) ---
+  if (resendApiKey) {
+    const resend = new Resend(resendApiKey);
+    const fromAddress = process.env.EMAIL_FROM_RESEND || 'Skill Swap <onboarding@resend.dev>';
+
+    const { data, error } = await resend.emails.send({
+      from: fromAddress,
+      to,
+      subject,
+      text,
+      html: html || text.replace(/\n/g, '<br>'),
+    });
+
+    if (error) {
+      console.error('❌ Resend email failed:', error);
+      throw new Error(`Failed to send email: ${error.message}`);
+    }
+
+    console.log('📧 Email sent via Resend:', data.id);
+    return { success: true, messageId: data.id };
+  }
+
+  // --- Fallback: SMTP via Nodemailer (Local Development) ---
   const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
   const smtpPort = Number(process.env.SMTP_PORT || 587);
   const smtpSecure = String(process.env.SMTP_SECURE || 'false').toLowerCase() === 'true';
@@ -10,25 +34,18 @@ const sendEmail = async ({ to, subject, text, html }) => {
   const smtpPass = process.env.SMTP_PASS;
   const emailFrom = process.env.EMAIL_FROM || smtpUser;
 
-  // Validate config
   if (!smtpUser || !smtpPass) {
-    throw new Error('Gmail SMTP credentials missing. Set SMTP_USER and SMTP_PASS in .env');
+    throw new Error('No email provider configured. Set RESEND_API_KEY or SMTP_USER/SMTP_PASS in .env');
   }
 
   const transporter = nodemailer.createTransport({
     host: smtpHost,
     port: smtpPort,
-    secure: smtpSecure, // true for 465, false for 587
-    auth: {
-      user: smtpUser,
-      pass: smtpPass,
-    },
-    tls: {
-      rejectUnauthorized: false // Sometimes needed for Gmail
-    }
+    secure: smtpSecure,
+    auth: { user: smtpUser, pass: smtpPass },
+    tls: { rejectUnauthorized: false }
   });
 
-  // Verify connection
   try {
     await transporter.verify();
     console.log('✅ SMTP Connection verified');
@@ -37,17 +54,13 @@ const sendEmail = async ({ to, subject, text, html }) => {
     throw new Error('Failed to connect to email server');
   }
 
-  const mailOptions = {
+  const info = await transporter.sendMail({
     from: `"Skill Swap" <${emailFrom}>`,
-    to,
-    subject,
-    text,
-    html: html || text.replace(/\n/g, '<br>'), // Convert newlines to HTML if no HTML provided
-  };
+    to, subject, text,
+    html: html || text.replace(/\n/g, '<br>'),
+  });
 
-  const info = await transporter.sendMail(mailOptions);
-  console.log('📧 Email sent:', info.messageId);
-  
+  console.log('📧 Email sent via SMTP:', info.messageId);
   return { success: true, messageId: info.messageId };
 };
 
