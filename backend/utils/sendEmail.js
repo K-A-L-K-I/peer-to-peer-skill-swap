@@ -28,8 +28,8 @@ const sendEmail = async ({ to, subject, text, html }) => {
 
   // --- Fallback: SMTP via Nodemailer (Local Development) ---
   const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
-  const smtpPort = Number(process.env.SMTP_PORT || 587);
-  const smtpSecure = String(process.env.SMTP_SECURE || 'false').toLowerCase() === 'true';
+  const smtpPort = Number(process.env.SMTP_PORT || 465);
+  const smtpSecure = String(process.env.SMTP_SECURE || 'true').toLowerCase() === 'true';
   const smtpUser = process.env.SMTP_USER;
   const smtpPass = process.env.SMTP_PASS;
   const emailFrom = process.env.EMAIL_FROM || smtpUser;
