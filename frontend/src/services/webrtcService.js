@@ -721,6 +721,8 @@ class WebRTCService {
           this.pc.addTrack(screenTrack, stream);
         }
 
+        this.hasVideo = true; // Fix: ensure renegotiation sends callType='video'
+
         this.screenStream = stream;
         this.isScreenSharing = true;
         return { stream, isScreenSharing: true };

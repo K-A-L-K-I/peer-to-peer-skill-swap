@@ -13,19 +13,23 @@ connectDB();
 
 const app = express();
 
-// CORS - Allow all origins in development
+// CORS - Allow local and production origins
 const corsOptions = {
   origin: function (origin, callback) {
-    if (!origin ||
+    const clientUrl = process.env.CLIENT_URL || '';
+    if (
+      !origin ||
       origin.includes('localhost') ||
       origin.includes('127.0.0.1') ||
-      /^http:\/\/192\.168\./.test(origin) ||
-      /^https:\/\/192\.168\./.test(origin) ||
-      /^http:\/\/10\./.test(origin) ||
-      /^https:\/\/10\./.test(origin)) {
+      /^https?:\/\/192\.168\./.test(origin) ||
+      /^https?:\/\/10\./.test(origin) ||
+      origin.includes('vercel.app') ||
+      origin.includes('onrender.com') ||
+      (clientUrl && origin === clientUrl)
+    ) {
       callback(null, true);
     } else {
-      callback(null, true); // Allow all for development
+      callback(null, true); // Allow all for now — tighten after confirming your Vercel URL
     }
   },
   credentials: true,
@@ -120,21 +124,7 @@ io.on('connection', (socket) => {
     socket.emit('online-users-list', Array.from(onlineUsersSet));
   });
 
-  // Handle disconnection
-  socket.on('disconnect', () => {
-    console.log(`🔌 User disconnected: ${socket.userId}`);
-
-    // Remove from strict tracking set
-    if (socket.userId) {
-      // Check if user has other active sockets before declaring fully offline
-      const userRooms = io.sockets.adapter.rooms.get(`user-${socket.userId}`);
-      if (!userRooms || userRooms.size === 0) {
-        onlineUsersSet.delete(socket.userId);
-        io.emit('user-offline', socket.userId);
-        console.log(`👤 User went offline: ${socket.userId}`);
-      }
-    }
-  });
+  // Disconnect handler merged below
 
   // ==================== WEBRTC SIGNALING ====================
 
@@ -371,6 +361,7 @@ io.on('connection', (socket) => {
   socket.on('disconnect', (reason) => {
     console.log(`🔌 User disconnected: ${socket.userId}, Reason: ${reason}`);
 
+    // Clean up active calls
     const userCallId = usersInCalls.get(socket.userId);
     if (userCallId) {
       const callData = activeCalls.get(userCallId);
@@ -388,7 +379,16 @@ io.on('connection', (socket) => {
       }
     }
 
-    io.emit('user-offline', { userId: socket.userId });
+    // Remove from strict tracking set and notify clients
+    if (socket.userId) {
+      // Check if user has other active sockets before declaring fully offline
+      const userRooms = io.sockets.adapter.rooms.get(`user-${socket.userId}`);
+      if (!userRooms || userRooms.size === 0) {
+        onlineUsersSet.delete(socket.userId);
+        io.emit('user-offline', socket.userId); // Emitting exactly the string
+        console.log(`👤 User went offline: ${socket.userId}`);
+      }
+    }
   });
 });
 

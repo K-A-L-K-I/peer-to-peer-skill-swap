@@ -72,8 +72,8 @@ const sendMessage = async (req, res) => {
       type: 'message',
       title: 'New Message',
       body: `${req.user.name} sent you a message`,
-      relatedModel: 'Message',
-      relatedId: message._id
+      relatedModel: 'SkillSwapRequest',
+      relatedId: swapRequest._id
     });
 
     // Broadcast with tempId so sender can match it

@@ -474,6 +474,13 @@ const VideoCall = ({ socket, currentUser, targetUser, onClose, callType = 'video
     setIsVideoOff(newVideoOffState);
   };
 
+  useEffect(() => {
+    return () => {
+      console.log('🧹 VideoCall unmounting, cleaning up webrtc...');
+      webrtcService.endCall();
+    };
+  }, []);
+
   const handleScreenShare = async () => {
     try {
       const { stream, isScreenSharing: sharing } = await webrtcService.toggleScreenShare();

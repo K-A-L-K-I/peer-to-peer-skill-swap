@@ -1,22 +1,9 @@
-const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const OTP = require('../models/OTP');
 const sendEmail = require('../utils/sendEmail');
 const { isAuthorizedEmail } = require('../utils/verifyEmail');
-
-// Store OTPs temporarily (in production, use Redis)
-const otpStore = new Map();
-
-// Clean up expired OTPs every 5 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [email, data] of otpStore.entries()) {
-    if (data.expires < now) {
-      otpStore.delete(email);
-    }
-  }
-}, 5 * 60 * 1000);
 
 const generateOTP = () => {
   // Generate 6-digit OTP
@@ -25,64 +12,47 @@ const generateOTP = () => {
 
 const requestRegistrationOTP = async (req, res) => {
   try {
-    console.log('📥 OTP Request received:', req.body);
-    
     const { email, name } = req.body;
 
     if (!email || !name) {
-      console.log('❌ Missing email or name');
-      return res.status(400).json({
-        message: 'Email and name are required'
-      });
+      return res.status(400).json({ message: 'Email and name are required' });
+    }
+
+    if (!name.trim()) {
+      return res.status(400).json({ message: 'Name cannot be empty' });
     }
 
     // Validate email domain
     const emailCheck = isAuthorizedEmail(email);
-    console.log('Email check result:', emailCheck);
-    
     if (!emailCheck.valid) {
-      console.log('❌ Email not authorized');
-      return res.status(400).json({ 
-        message: `Email not authorized: ${emailCheck.reason}` 
-      });
+      return res.status(400).json({ message: `Email not authorized: ${emailCheck.reason}` });
     }
 
     // Check if user already exists
     const existingUser = await User.findOne({ email: email.toLowerCase() });
-    console.log('Existing user check:', existingUser ? 'Found' : 'Not found');
-    
     if (existingUser) {
-      console.log('❌ User already exists');
       return res.status(400).json({ message: 'User already exists with this email' });
     }
 
-    // Generate OTP
+    // Generate OTP and hash it
     const otp = generateOTP();
-    console.log('Generated OTP:', otp);
-    
     const hashedOTP = await bcrypt.hash(otp, 10);
-    
-    // Store OTP with expiration (10 minutes)
-    otpStore.set(email.toLowerCase(), {
-      otp: hashedOTP,
-      expires: Date.now() + 10 * 60 * 1000,
-      name: name.trim(),
-      attempts: 0
-    });
-    
-    console.log('OTP stored in memory');
+
+    // Upsert OTP record in DB (replace if already exists for this email)
+    await OTP.findOneAndUpdate(
+      { email: email.toLowerCase() },
+      {
+        email: email.toLowerCase(),
+        otp: hashedOTP,
+        name: name.trim(),
+        attempts: 0,
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000) // 10 minutes
+      },
+      { upsert: true, new: true }
+    );
 
     // Send OTP email
-    const message = `Hello ${name},
-
-Your Skill Swap verification code is: ${otp}
-
-This code will expire in 10 minutes.
-
-If you didn't request this code, please ignore this email.
-
-Best regards,
-Skill Swap Team`;
+    const message = `Hello ${name},\n\nYour Skill Swap verification code is: ${otp}\n\nThis code will expire in 10 minutes.\n\nIf you didn't request this code, please ignore this email.\n\nBest regards,\nSkill Swap Team`;
 
     const htmlMessage = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -99,8 +69,6 @@ Skill Swap Team`;
       </div>
     `;
 
-    console.log('📧 Attempting to send email to:', email);
-
     await sendEmail({
       to: email,
       subject: 'Skill Swap - Your Verification Code',
@@ -108,73 +76,67 @@ Skill Swap Team`;
       html: htmlMessage
     });
 
-    console.log('✅ Email sent successfully');
-
     return res.status(200).json({
       message: 'Verification code sent to your email',
       email: email.toLowerCase()
     });
   } catch (error) {
-    console.error('❌ OTP request error:', error);
+    console.error('OTP request error:', error);
     return res.status(500).json({ message: error.message || 'Server error' });
   }
 };
 
 const verifyOTPAndRegister = async (req, res) => {
   try {
-    console.log('📥 OTP Verification received:', { ...req.body, otp: '***' });
-    
     const { email, otp, name, password, skillsOffered, skillsWanted, profilePicture } = req.body;
 
     if (!email || !otp || !name || !password) {
-      return res.status(400).json({
-        message: 'Email, OTP, name, and password are required'
-      });
+      return res.status(400).json({ message: 'Email, OTP, name, and password are required' });
     }
 
     const normalizedEmail = email.toLowerCase();
-    const otpData = otpStore.get(normalizedEmail);
 
-    if (!otpData) {
-      console.log('❌ OTP not found in store');
+    // Find OTP record from DB
+    const otpRecord = await OTP.findOne({ email: normalizedEmail });
+
+    if (!otpRecord) {
       return res.status(400).json({ message: 'OTP expired or not requested. Please request a new code.' });
     }
 
-    if (otpData.expires < Date.now()) {
-      otpStore.delete(normalizedEmail);
-      console.log('❌ OTP expired');
+    // TTL index handles expiry automatically, but double-check just in case
+    if (otpRecord.expiresAt < new Date()) {
+      await OTP.deleteOne({ email: normalizedEmail });
       return res.status(400).json({ message: 'OTP expired. Please request a new code.' });
     }
 
-    if (otpData.attempts >= 3) {
-      otpStore.delete(normalizedEmail);
-      console.log('❌ Too many attempts');
+    if (otpRecord.attempts >= 3) {
+      await OTP.deleteOne({ email: normalizedEmail });
       return res.status(400).json({ message: 'Too many failed attempts. Please request a new code.' });
     }
 
-    const isValidOTP = await bcrypt.compare(otp, otpData.otp);
-    
+    const isValidOTP = await bcrypt.compare(otp, otpRecord.otp);
+
     if (!isValidOTP) {
-      otpData.attempts += 1;
-      console.log('❌ Invalid OTP, attempt:', otpData.attempts);
-      return res.status(400).json({ 
-        message: `Invalid OTP. ${3 - otpData.attempts} attempts remaining.` 
-      });
+      // Increment attempts in DB
+      await OTP.updateOne({ email: normalizedEmail }, { $inc: { attempts: 1 } });
+      const remainingAttempts = 3 - (otpRecord.attempts + 1);
+      return res.status(400).json({ message: `Invalid OTP. ${remainingAttempts} attempt${remainingAttempts !== 1 ? 's' : ''} remaining.` });
     }
 
-    console.log('✅ OTP verified');
-
+    // Validate profile picture size
     const MAX_FILE_SIZE = 2 * 1024 * 1024;
     if (profilePicture && profilePicture.length > MAX_FILE_SIZE * 1.4) {
       return res.status(400).json({ message: 'Profile picture too large. Max 2MB.' });
     }
 
+    // Check user doesn't already exist (race-condition guard)
     const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
-      otpStore.delete(normalizedEmail);
+      await OTP.deleteOne({ email: normalizedEmail });
       return res.status(400).json({ message: 'User already exists' });
     }
 
+    // Create user
     const user = await User.create({
       name: name.trim(),
       email: normalizedEmail,
@@ -187,9 +149,8 @@ const verifyOTPAndRegister = async (req, res) => {
       emailVerificationExpire: null
     });
 
-    console.log('✅ User created:', user._id);
-
-    otpStore.delete(normalizedEmail);
+    // Clean up OTP record
+    await OTP.deleteOne({ email: normalizedEmail });
 
     const jwtSecret = process.env.JWT_SECRET;
     if (!jwtSecret) {
@@ -215,7 +176,7 @@ const verifyOTPAndRegister = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ OTP verification error:', error);
+    console.error('OTP verification error:', error);
 
     if (error.code === 11000) {
       return res.status(400).json({ message: 'User already exists' });
@@ -235,15 +196,16 @@ const resendOTP = async (req, res) => {
     const { email, name } = req.body;
 
     if (!email || !name) {
-      return res.status(400).json({
-        message: 'Email and name are required'
-      });
+      return res.status(400).json({ message: 'Email and name are required' });
     }
 
-    otpStore.delete(email.toLowerCase());
+    // Delete old OTP record before requesting a new one
+    await OTP.deleteOne({ email: email.toLowerCase() });
+
+    // Delegate to the standard request flow
     return requestRegistrationOTP(req, res);
   } catch (error) {
-    console.error('❌ Resend OTP error:', error);
+    console.error('Resend OTP error:', error);
     return res.status(500).json({ message: error.message || 'Server error' });
   }
 };

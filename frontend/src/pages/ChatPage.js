@@ -342,6 +342,7 @@ function ChatPage() {
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const remoteTypingTimeoutRef = useRef(null); // Fix: auto-clear remote typing
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
   const currentUserId = String(currentUser._id || '');
 
@@ -463,6 +464,14 @@ function ChatPage() {
     const unsubTyping = socketService.on('user-typing', ({ swapRequestId, isTyping: typing, userId }) => {
       if (swapRequestId === activeChatId && userId !== currentUserId) {
         setOtherUserTyping(typing);
+
+        // Auto-clear typing indicator if the socket disconnects or misses the false event
+        if (remoteTypingTimeoutRef.current) clearTimeout(remoteTypingTimeoutRef.current);
+        if (typing) {
+          remoteTypingTimeoutRef.current = setTimeout(() => {
+            setOtherUserTyping(false);
+          }, 3000);
+        }
       }
     });
 

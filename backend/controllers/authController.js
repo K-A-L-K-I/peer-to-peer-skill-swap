@@ -360,7 +360,10 @@ const forgotPassword = async (req, res) => {
     const user = await User.findOne({ email: email.toLowerCase() });
 
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      // Prevents email enumeration by returning the exact same success message
+      return res.status(200).json({
+        message: 'Password reset link sent to your email'
+      });
     }
 
     // Generate reset token

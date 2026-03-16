@@ -215,6 +215,12 @@ function AppLayout({ children }) {
     if (!incomingCallData) return;
     const callSnapshot = incomingCallData;
     setIncomingCallData(null);
+
+    // Explicitly end any existing WebRTC calls to free up camera/mic before answering the new one
+    import('./services/webrtcService').then(module => {
+      module.default.endCall();
+    }).catch(err => console.error(err));
+
     // Navigate to chat and pass the incoming call data so ChatPage auto-opens VideoCall
     navigate('/chat', { state: { incomingCall: callSnapshot } });
   }, [incomingCallData, navigate]);
@@ -248,6 +254,8 @@ function AppLayout({ children }) {
 }
 
 function App() {
+  const { token } = useAuthStore();
+
   return (
     <BrowserRouter>
       <Routes>
@@ -306,7 +314,9 @@ function App() {
         } />
 
         {/* Default / Fallback Route */}
-        <Route path="*" element={<Navigate to="/profile" replace />} />
+        <Route path="*" element={
+          token ? <Navigate to="/profile" replace /> : <Navigate to="/login" replace />
+        } />
       </Routes>
     </BrowserRouter>
   );
