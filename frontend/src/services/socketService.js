@@ -29,14 +29,11 @@ class SocketService {
 
     this.socket = io(socketUrl, {
       auth: { token },
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'], // Try polling first, upgrade to WS
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,
-      timeout: 10000,
-      // Allow self-signed certificates
-      rejectUnauthorized: false,
-      secure: true
+      timeout: 10000
     });
 
     this.socket.on('connect', () => {
