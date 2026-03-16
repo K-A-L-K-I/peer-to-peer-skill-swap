@@ -79,6 +79,8 @@ io.use((socket, next) => {
 
 // Socket.io connection handling
 const onlineUsersSet = new Set(); // Track all connected user IDs
+const activeCalls = new Map();    // Map<callId, callData>
+const usersInCalls = new Map();   // Map<userId, callId>
 
 io.on('connection', (socket) => {
   console.log(`🔌 User connected: ${socket.userId} (Socket: ${socket.id})`);
