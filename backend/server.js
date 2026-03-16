@@ -32,8 +32,7 @@ const corsOptions = {
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Accept']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
 };
 
 app.use(cors(corsOptions));
@@ -49,11 +48,7 @@ console.log('🌍 HTTP server created (HTTPS handled by cloud load balancer)');
 
 // Socket.io configuration
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ['GET', 'POST'],
-    credentials: true
-  }
+  cors: corsOptions
 });
 
 // Socket.io authentication middleware
