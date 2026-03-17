@@ -171,6 +171,25 @@ const VideoCall = ({ socket, currentUser, targetUser, onClose, callType = 'video
     webrtcService.remoteUserId = data.from;
     webrtcService.callId = data.callId;
 
+    if (data.renegotiation && webrtcService.pc) {
+      console.log('🔄 Mid-call renegotiation received silently');
+      try {
+        await webrtcService.setRemoteDescription(data.offer);
+        const answer = await webrtcService.createAnswer(data.offer);
+        if (socketRef.current) {
+          socketRef.current.emit('accept-call', {
+            callId: data.callId,
+            answer,
+            to: webrtcService.remoteUserId,
+            renegotiation: true
+          });
+        }
+      } catch (err) {
+        console.error('Failed renegotiation:', err);
+      }
+      return;
+    }
+
     // Ensure media is initialized before showing incoming call UI
     if (!webrtcService.localStream) {
       try {
@@ -560,6 +579,7 @@ const VideoCall = ({ socket, currentUser, targetUser, onClose, callType = 'video
   };
 
   const startTimer = () => {
+    stopTimer();
     timerRef.current = setInterval(() => {
       setCallDuration(p => p + 1);
     }, 1000);

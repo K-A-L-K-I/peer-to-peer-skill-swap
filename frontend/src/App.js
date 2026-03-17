@@ -184,6 +184,7 @@ function AppLayout({ children }) {
 
       // ── Global incoming call listener ──────────────────────────────
       const unsubIncomingCall = socketService.on('incoming-call', (data) => {
+        if (data.renegotiation) return; // Silent renegotiations are handled directly by VideoCall.js
         console.log('🌐 [AppLayout] Global incoming call:', data);
         setIncomingCallData(data);
       });
