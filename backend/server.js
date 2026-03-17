@@ -344,22 +344,31 @@ io.on('connection', (socket) => {
   socket.on('disconnect', (reason) => {
     console.log(`🔌 User disconnected: ${socket.userId}, Reason: ${reason}`);
 
-    // Clean up active calls
+    // Clean up active calls with a grace period for network drops
     const userCallId = usersInCalls.get(socket.userId);
     if (userCallId) {
-      const callData = activeCalls.get(userCallId);
-      if (callData) {
-        console.log(`📴 Auto-ending call ${userCallId} due to disconnect`);
-        const otherParty = callData.participants.find(id => String(id) !== String(socket.userId));
-        io.to(`user-${otherParty}`).emit('call-ended', {
-          callId: userCallId,
-          reason: 'peer-disconnected',
-          duration: callData.startTime ? Date.now() - callData.startTime : 0
-        });
-        callData.participants.forEach(pid => usersInCalls.delete(pid));
-        saveCallHistory(callData, callData.startTime ? Date.now() - callData.startTime : 0).catch(console.error);
-        activeCalls.delete(userCallId);
-      }
+      // Don't kill the call immediately, give them 10s to reconnect
+      setTimeout(() => {
+        // Check if the user is STILL disconnected after 10s
+        const userRooms = io.sockets.adapter.rooms.get(`user-${socket.userId}`);
+        if (!userRooms || userRooms.size === 0) {
+          const callData = activeCalls.get(userCallId);
+          if (callData) {
+            console.log(`📴 Auto-ending call ${userCallId} due to disconnect timeout`);
+            const otherParty = callData.participants.find(id => String(id) !== String(socket.userId));
+            io.to(`user-${otherParty}`).emit('call-ended', {
+              callId: userCallId,
+              reason: 'peer-disconnected',
+              duration: callData.startTime ? Date.now() - callData.startTime : 0
+            });
+            callData.participants.forEach(pid => usersInCalls.delete(pid));
+            saveCallHistory(callData, callData.startTime ? Date.now() - callData.startTime : 0).catch(console.error);
+            activeCalls.delete(userCallId);
+          }
+        } else {
+          console.log(`⚡ User ${socket.userId} reconnected fast enough, keeping call alive`);
+        }
+      }, 10000); // 10 second grace period
     }
 
     // Remove from strict tracking set and notify clients

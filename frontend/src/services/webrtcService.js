@@ -548,9 +548,10 @@ class WebRTCService {
     if (this.onError) {
       this.onError('Connection failed. Please check your network connection.');
     }
-    if (this.pc) {
-      this.pc.restartIce();
-    }
+    // Note: Do not manually call this.pc.restartIce() here. 
+    // The browser automatically tries subsequent ICE candidates (like the TURN server) 
+    // when connection drops. Manually restarting it interrupts that process.
+    console.log('⏳ Waiting for browser to attempt automatic ICE failover (e.g. via TURN server)...');
   }
 
   toggleAudio(muted) {
