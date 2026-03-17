@@ -320,8 +320,11 @@ class WebRTCService {
         if (this.socket && this.remoteUserId) {
           this.sendIceCandidate(event.candidate);
         } else {
-          console.log('⏳ Socket or remoteUserId not ready, queuing ICE candidate');
-          this.iceCandidatesQueue.push(event.candidate);
+          console.log('⏳ Socket or remoteUserId not ready, queuing ICE candidate to SEND layer');
+          if (!this.pendingIceCandidatesToSend) {
+            this.pendingIceCandidatesToSend = [];
+          }
+          this.pendingIceCandidatesToSend.push(event.candidate);
         }
       } else {
         console.log('✅ ICE gathering complete');
@@ -403,6 +406,18 @@ class WebRTCService {
     }
   }
 
+  flushPendingIceCandidates() {
+    if (this.pendingIceCandidatesToSend && this.pendingIceCandidatesToSend.length > 0) {
+      if (this.socket && this.remoteUserId) {
+        console.log(`📤 Flushing ${this.pendingIceCandidatesToSend.length} pending ICE candidates...`);
+        this.pendingIceCandidatesToSend.forEach(candidate => {
+          this.sendIceCandidate(candidate);
+        });
+        this.pendingIceCandidatesToSend = [];
+      }
+    }
+  }
+
   async createOffer() {
     try {
       this.isManualNegotiation = true;
@@ -419,6 +434,8 @@ class WebRTCService {
       console.log('✅ Offer created and set as local description');
 
       await this.waitForIceGathering();
+
+      this.flushPendingIceCandidates();
 
       this.isMakingOffer = false;
       this.isManualNegotiation = false;
@@ -450,6 +467,8 @@ class WebRTCService {
       console.log('✅ Answer created and set as local description');
 
       await this.waitForIceGathering();
+
+      this.flushPendingIceCandidates();
 
       this.isManualNegotiation = false;
       return this.pc.localDescription;
