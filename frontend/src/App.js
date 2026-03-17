@@ -178,6 +178,14 @@ function AppLayout({ children }) {
       };
       setTimeout(checkAndRegister, 1000);
 
+      // When the socket reconnects after a drop, immediately ask for the latest online user list
+      const unsubReconnect = socketService.on('connect', () => {
+        if (socketService.isConnected()) {
+          registerSocket(user._id, user.name);
+          socketService.emit('get-online-users');
+        }
+      });
+
       const unsubOnlineList = socketService.on('online-users-list', (userIds) => setOnlineUsers(userIds.map(id => String(id))));
       const unsubUserOnline = socketService.on('user-online', ({ userId }) => addOnlineUser(userId));
       const unsubUserOffline = socketService.on('user-offline', (userId) => removeOnlineUser(userId));
@@ -202,6 +210,7 @@ function AppLayout({ children }) {
       }, 30000);
 
       return () => {
+        unsubReconnect();
         unsubOnlineList();
         unsubUserOnline();
         unsubUserOffline();

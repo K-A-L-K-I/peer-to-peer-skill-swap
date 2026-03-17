@@ -132,7 +132,9 @@ class WebRTCService {
       // Provide specific error messages
       let errorMessage = 'Camera/Microphone access failed';
 
-      if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError') {
+      // Always fallback to Mock Stream if hardware is missing, 
+      // even if it failed during the audio-only fallback attempt.
+      if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError' || err.message.includes('media devices')) {
         console.warn('⚠️ No physical hardware detected. Generating a mock media stream for testing...');
         const mockStream = this.createMockStream();
         this.localStream = mockStream;
