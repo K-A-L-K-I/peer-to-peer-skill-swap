@@ -43,7 +43,8 @@ const sendEmail = async ({ to, subject, text, html }) => {
     port: smtpPort,
     secure: smtpSecure,
     auth: { user: smtpUser, pass: smtpPass },
-    tls: { rejectUnauthorized: false }
+    tls: { rejectUnauthorized: false },
+    connectionTimeout: 5000 // Fail fast if Render blocks the port
   });
 
   try {
