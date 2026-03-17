@@ -1,41 +1,49 @@
 const nodemailer = require('nodemailer');
-const { Resend } = require('resend');
 
 const sendEmail = async ({ to, subject, text, html }) => {
-  const resendApiKey = process.env.RESEND_API_KEY;
+  const brevoApiKey = process.env.BREVO_API_KEY;
 
-  // --- Use Resend API (Production / Render) ---
-  if (resendApiKey) {
-    const resend = new Resend(resendApiKey);
-    const fromAddress = process.env.EMAIL_FROM_RESEND || 'Skill Swap <onboarding@resend.dev>';
+  // --- Use Brevo REST API (Cloud/Render) — no TCP ports, just HTTPS ---
+  if (brevoApiKey) {
+    const emailFrom = process.env.EMAIL_FROM || 'skillswap@brevo.com';
 
-    const { data, error } = await resend.emails.send({
-      from: fromAddress,
-      to,
-      subject,
-      text,
-      html: html || text.replace(/\n/g, '<br>'),
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'api-key': brevoApiKey
+      },
+      body: JSON.stringify({
+        sender: { name: 'Skill Swap', email: emailFrom },
+        to: [{ email: to }],
+        subject,
+        textContent: text,
+        htmlContent: html || text.replace(/\n/g, '<br>')
+      })
     });
 
-    if (error) {
-      console.error('❌ Resend email failed:', error);
-      throw new Error(`Failed to send email: ${error.message}`);
+    const data = await response.json();
+
+    if (!response.ok) {
+      console.error('❌ Brevo API email failed:', data);
+      throw new Error(`Failed to send email: ${data.message || JSON.stringify(data)}`);
     }
 
-    console.log('📧 Email sent via Resend:', data.id);
-    return { success: true, messageId: data.id };
+    console.log('📧 Email sent via Brevo API:', data.messageId);
+    return { success: true, messageId: data.messageId };
   }
 
   // --- Fallback: SMTP via Nodemailer (Local Development) ---
   const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
-  const smtpPort = Number(process.env.SMTP_PORT || 465);
-  const smtpSecure = String(process.env.SMTP_SECURE || 'true').toLowerCase() === 'true';
+  const smtpPort = Number(process.env.SMTP_PORT || 587);
+  const smtpSecure = String(process.env.SMTP_SECURE || 'false').toLowerCase() === 'true';
   const smtpUser = process.env.SMTP_USER;
   const smtpPass = process.env.SMTP_PASS;
   const emailFrom = process.env.EMAIL_FROM || smtpUser;
 
   if (!smtpUser || !smtpPass) {
-    throw new Error('No email provider configured. Set RESEND_API_KEY or SMTP_USER/SMTP_PASS in .env');
+    throw new Error('No email provider configured. Set BREVO_API_KEY or SMTP_USER/SMTP_PASS in .env');
   }
 
   const transporter = nodemailer.createTransport({
@@ -43,8 +51,7 @@ const sendEmail = async ({ to, subject, text, html }) => {
     port: smtpPort,
     secure: smtpSecure,
     auth: { user: smtpUser, pass: smtpPass },
-    tls: { rejectUnauthorized: false },
-    connectionTimeout: 5000 // Fail fast if Render blocks the port
+    tls: { rejectUnauthorized: false }
   });
 
   try {
