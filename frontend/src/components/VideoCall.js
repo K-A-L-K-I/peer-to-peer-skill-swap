@@ -144,6 +144,16 @@ const VideoCall = ({ socket, currentUser, targetUser, onClose, callType = 'video
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty dependency array, init only runs ONCE over lifecycle
 
+  // Keep local stream attached even if React re-renders the <video> element
+  useEffect(() => {
+    if (localVideoRef.current && webrtcService.localStream) {
+      if (localVideoRef.current.srcObject !== webrtcService.localStream) {
+        console.log('📺 Re-attaching local stream to video element after render');
+        localVideoRef.current.srcObject = webrtcService.localStream;
+      }
+    }
+  }); // Runs after every render to ensure the binding survives React DOM updates
+
   // Monitor remote stream and attach to video element
   useEffect(() => {
     if (remoteStreamReady && remoteVideoRef.current && webrtcService.remoteStream) {
