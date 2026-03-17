@@ -487,27 +487,12 @@ class WebRTCService {
   }
 
   waitForIceGathering() {
-    return new Promise((resolve) => {
-      if (!this.pc || this.pc.iceGatheringState === 'complete') {
-        resolve();
-        return;
-      }
-
-      const checkState = () => {
-        if (!this.pc || this.pc.iceGatheringState === 'complete') {
-          if (this.pc) this.pc.removeEventListener('icegatheringstatechange', checkState);
-          console.log('⏱️ ICE gathering complete');
-          resolve();
-        }
-      };
-
-      this.pc.addEventListener('icegatheringstatechange', checkState);
-      setTimeout(() => {
-        if (this.pc) this.pc.removeEventListener('icegatheringstatechange', checkState);
-        console.log('⏱️ ICE gathering timeout, proceeding');
-        resolve();
-      }, 3000);
-    });
+    // In modern WebRTC, we use "Trickle ICE", meaning we don't wait for all candidates 
+    // to be gathered before sending the offer/answer. We send the offer immediately, 
+    // and as the browser finds new ICE candidates (like the TURN server), it emits 
+    // them via 'onicecandidate' and we send them through the socket individually.
+    // Waiting here with a timeout is an anti-pattern that breaks slow TURN servers.
+    return Promise.resolve();
   }
 
   async addIceCandidate(candidate) {

@@ -179,7 +179,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  // 2. Call acceptance (Callee → Server → Caller)
+  // 2. Call acceptance (Callee → Server → Caller) and Renegotiation Answers
   socket.on('accept-call', (data) => {
     const { callId, answer, to } = data;
     const callData = activeCalls.get(callId);
@@ -189,20 +189,28 @@ io.on('connection', (socket) => {
       return;
     }
 
-    if (String(callData.callee) !== String(socket.userId)) {
+    // Allow either the caller or callee to answer (needed for bidirectional WebRTC renegotiation)
+    if (String(callData.callee) !== String(socket.userId) && String(callData.caller) !== String(socket.userId)) {
       socket.emit('call-error', { message: 'Not authorized to accept this call' });
       return;
     }
 
-    console.log(`✅ Call accepted: ${callId} by ${socket.userId}`);
+    console.log(`✅ Call answer received: ${callId} from ${socket.userId}`);
 
     callData.status = 'connected';
-    callData.startTime = Date.now();
-    callData.calleeSocket = socket.id;
+    if (!callData.startTime) callData.startTime = Date.now();
+
+    // Update socket mapping
+    if (String(callData.callee) === String(socket.userId)) {
+      callData.calleeSocket = socket.id;
+    }
     activeCalls.set(callId, callData);
     socket.currentCallId = callId;
 
-    io.to(`user-${callData.caller}`).emit('call-accepted', {
+    // Send the answer to the OTHER person
+    const targetUserId = String(callData.caller) === String(socket.userId) ? callData.callee : callData.caller;
+
+    io.to(`user-${targetUserId}`).emit('call-accepted', {
       callId,
       answer,
       from: socket.userId
