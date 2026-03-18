@@ -679,7 +679,7 @@ const VideoCall = ({ socket, currentUser, targetUser, onClose, callType = 'video
         <div className="video-wrapper">
           {/* Remote Video (Connected) */}
           {isCallActive && (
-            <div className="remote-video-container">
+            <div className={`remote-video-container ${isWhiteboardActive ? (isSidebarOpen ? 'remote-video-pip sidebar-active' : 'remote-video-pip') : ''}`}>
               <video
                 ref={remoteVideoRef}
                 autoPlay
@@ -1148,6 +1148,31 @@ const VideoCall = ({ socket, currentUser, targetUser, onClose, callType = 'video
           object-fit: cover;
         }
 
+        .remote-video-pip {
+          position: absolute;
+          bottom: 110px;
+          right: 230px; /* 32px + 180px + 18px margin */
+          width: 180px;
+          height: 270px;
+          border-radius: 16px;
+          overflow: hidden;
+          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
+          border: 2px solid #3b82f6; /* Blue border to distinguish from local */
+          z-index: 10;
+          transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+          background: #1e293b;
+        }
+
+        .remote-video-pip.sidebar-active {
+          right: 538px; /* 340px + 180px + 18px margin */
+        }
+        
+        .remote-video-pip .avatar-pulse {
+          width: 60px !important;
+          height: 60px !important;
+          font-size: 1.5rem !important;
+        }
+
         .local-video-pip {
           position: absolute;
           bottom: 110px;
@@ -1172,6 +1197,19 @@ const VideoCall = ({ socket, currentUser, targetUser, onClose, callType = 'video
             right: 20px;
             border-radius: 12px;
             border-width: 1px;
+          }
+          
+          .remote-video-pip {
+            width: 110px;
+            height: 165px;
+            bottom: 100px;
+            right: 140px; /* 20 + 110 + 10 margin */
+            border-radius: 12px;
+            border-width: 1px;
+          }
+          
+          .remote-video-pip.sidebar-active {
+            right: 140px; /* Keep same on mobile due to bottom sheet layout */
           }
         }
 
