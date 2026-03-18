@@ -54,114 +54,130 @@ class WebRTCService {
   }
 
   async initializeMedia(constraints = { video: true, audio: true }) {
-    try {
-      console.log('🎥 Requesting media access...', constraints);
-
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('Browser does not support media devices. Please use a modern browser with HTTPS.');
-      }
-
-      // Stop any existing tracks
-      if (this.localStream) {
-        this.localStream.getTracks().forEach(track => track.stop());
-      }
-
-      // Try video + audio first with simple basic constraints to maximize device compatibility
-      let stream = null;
-
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: constraints.video ? true : false,
-          audio: constraints.audio ? true : false
-        });
-        this.hasVideo = constraints.video && stream.getVideoTracks().length > 0;
-        this.hasAudio = constraints.audio && stream.getAudioTracks().length > 0;
-      } catch (err) {
-        console.warn('⚠️ Video+Audio failed:', err.name);
-
-        // If video was requested, try audio-only
-        if (constraints.video && constraints.audio) {
-          console.log('🎤 Trying audio-only...');
-          try {
-            stream = await navigator.mediaDevices.getUserMedia({
-              video: false,
-              audio: true
-            });
-            this.hasVideo = false;
-            this.hasAudio = true;
-            console.log('✅ Audio-only mode enabled');
-          } catch (audioErr) {
-            console.warn('⚠️ Audio-only also failed:', audioErr.name);
-
-            // Last resort: try video-only (some devices have camera but no mic)
-            if (constraints.video) {
-              console.log('📹 Trying video-only...');
-              try {
-                stream = await navigator.mediaDevices.getUserMedia({
-                  video: true,
-                  audio: false
-                });
-                this.hasVideo = true;
-                this.hasAudio = false;
-                console.log('✅ Video-only mode enabled');
-              } catch (videoOnlyErr) {
-                throw videoOnlyErr; // Nothing works
-              }
-            } else {
-              throw audioErr;
-            }
-          }
-        } else {
-          throw err;
-        }
-      }
-
-      // If we still don't have a stream, throw error
-      if (!stream) {
-        throw new Error('Could not access any media devices');
-      }
-
-      this.localStream = stream;
-
-      const tracks = this.localStream.getTracks();
-      console.log('✅ Media access granted. Tracks:', tracks.map(t => `${t.kind}:${t.id}`));
-      console.log(`📹 Video: ${this.hasVideo}, 🎤 Audio: ${this.hasAudio}`);
-
-      // If we have no video and no audio, that's a problem
-      if (!this.hasVideo && !this.hasAudio) {
-        throw new Error('No camera or microphone available on this device');
-      }
-
-      return this.localStream;
-    } catch (err) {
-      console.error('❌ Media access error:', err);
-
-      // Provide specific error messages
-      let errorMessage = 'Camera/Microphone access failed';
-
-      // Always fallback to Mock Stream if hardware is missing, 
-      // even if it failed during the audio-only fallback attempt.
-      if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError' || err.message.includes('media devices')) {
-        console.warn('⚠️ No physical hardware detected. Generating a mock media stream for testing...');
-        const mockStream = this.createMockStream();
-        this.localStream = mockStream;
-        this.hasVideo = true;
-        this.hasAudio = true;
-        return this.localStream;
-      } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        errorMessage = 'Camera/Microphone permission denied. Please allow access in your browser settings and refresh the page.';
-      } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
-        errorMessage = 'Camera or microphone is already in use by another application. Please close other apps and try again.';
-      } else if (err.name === 'OverconstrainedError') {
-        errorMessage = 'Camera does not support the requested settings. Please try a different camera.';
-      } else if (err.message.includes('No camera or microphone available')) {
-        errorMessage = err.message;
-      } else if (err.message.includes('Browser does not support')) {
-        errorMessage = err.message;
-      }
-
-      throw new Error(errorMessage);
+    // If we're already fetching media, return that promise to prevent device lock races
+    if (this._mediaInitPromise) {
+      console.log('⏳ Media access already in progress, awaiting existing promise...');
+      return this._mediaInitPromise;
     }
+
+    // If we already have a healthy active stream, don't ask the user again
+    if (this.localStream && this.localStream.active) {
+      console.log('♻️ Reusing existing active local stream');
+      return this.localStream;
+    }
+
+    this._mediaInitPromise = (async () => {
+      try {
+        console.log('🎥 Requesting media access...', constraints);
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error('Browser does not support media devices. Please use a modern browser with HTTPS.');
+        }
+
+        // Stop any existing tracks
+        if (this.localStream) {
+          this.localStream.getTracks().forEach(track => track.stop());
+        }
+
+        // Try video + audio first with simple basic constraints to maximize device compatibility
+        let stream = null;
+
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: constraints.video ? true : false,
+            audio: constraints.audio ? true : false
+          });
+          this.hasVideo = constraints.video && stream.getVideoTracks().length > 0;
+          this.hasAudio = constraints.audio && stream.getAudioTracks().length > 0;
+        } catch (err) {
+          console.warn('⚠️ Video+Audio failed:', err.name);
+
+          // If video was requested, try audio-only
+          if (constraints.video && constraints.audio) {
+            console.log('🎤 Trying audio-only...');
+            try {
+              stream = await navigator.mediaDevices.getUserMedia({
+                video: false,
+                audio: true
+              });
+              this.hasVideo = false;
+              this.hasAudio = true;
+              console.log('✅ Audio-only mode enabled');
+            } catch (audioErr) {
+              console.warn('⚠️ Audio-only also failed:', audioErr.name);
+
+              // Last resort: try video-only (some devices have camera but no mic)
+              if (constraints.video) {
+                console.log('📹 Trying video-only...');
+                try {
+                  stream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: false
+                  });
+                  this.hasVideo = true;
+                  this.hasAudio = false;
+                  console.log('✅ Video-only mode enabled');
+                } catch (videoOnlyErr) {
+                  throw videoOnlyErr; // Nothing works
+                }
+              } else {
+                throw audioErr;
+              }
+            }
+          } else {
+            throw err;
+          }
+        }
+
+        // If we still don't have a stream, throw error
+        if (!stream) {
+          throw new Error('Could not access any media devices');
+        }
+
+        this.localStream = stream;
+
+        const tracks = this.localStream.getTracks();
+        console.log('✅ Media access granted. Tracks:', tracks.map(t => `${t.kind}:${t.id}`));
+        console.log(`📹 Video: ${this.hasVideo}, 🎤 Audio: ${this.hasAudio}`);
+
+        // If we have no video and no audio, that's a problem
+        if (!this.hasVideo && !this.hasAudio) {
+          throw new Error('No camera or microphone available on this device');
+        }
+
+        return this.localStream;
+      } catch (err) {
+        console.error('❌ Media access error:', err);
+
+        // Provide specific error messages
+        let errorMessage = 'Camera/Microphone access failed';
+
+        // Always fallback to Mock Stream if hardware is missing, 
+        // even if it failed during the audio-only fallback attempt.
+        if (err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError' || err.message.includes('media devices')) {
+          console.warn('⚠️ No physical hardware detected. Generating a mock media stream for testing...');
+          const mockStream = this.createMockStream();
+          this.localStream = mockStream;
+          this.hasVideo = true;
+          this.hasAudio = true;
+          return this.localStream;
+        } else if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          errorMessage = 'Camera/Microphone permission denied. Please allow access in your browser settings and refresh the page.';
+        } else if (err.name === 'NotReadableError' || err.name === 'TrackStartError') {
+          errorMessage = 'Camera or microphone is already in use by another application. Please close other apps and try again.';
+        } else if (err.name === 'OverconstrainedError') {
+          errorMessage = 'Camera does not support the requested settings. Please try a different camera.';
+        } else if (err.message.includes('No camera or microphone available')) {
+          errorMessage = err.message;
+        } else if (err.message.includes('Browser does not support')) {
+          errorMessage = err.message;
+        }
+
+        throw new Error(errorMessage);
+      }
+    })();
+
+    return this._mediaInitPromise;
   }
 
   createMockStream() {
@@ -620,6 +636,8 @@ class WebRTCService {
 
     this.remoteStream = null;
     this.iceCandidatesQueue = [];
+    this.pendingIceCandidatesToSend = [];
+    this._mediaInitPromise = null;
     this.remoteUserId = null;
     this.isInitiator = false;
     this.callId = null;
