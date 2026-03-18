@@ -679,7 +679,7 @@ const VideoCall = ({ socket, currentUser, targetUser, onClose, callType = 'video
         <div className="video-wrapper">
           {/* Remote Video (Connected) */}
           {isCallActive && (
-            <div className={`remote-video-container ${isWhiteboardActive ? (isSidebarOpen ? 'remote-video-pip sidebar-active' : 'remote-video-pip') : ''}`}>
+            <div className="remote-video-container">
               <video
                 ref={remoteVideoRef}
                 autoPlay
@@ -728,28 +728,28 @@ const VideoCall = ({ socket, currentUser, targetUser, onClose, callType = 'video
             </div>
           )}
 
-          {/* Local Video */}
+          {/* Local Video — video element always in DOM so localVideoRef stays valid */}
           <div className={isCallActive ? (isWhiteboardActive || isSidebarOpen ? 'local-video-pip sidebar-active' : 'local-video-pip') : 'local-video-container'}>
-            {hasLocalVideo ? (
-              <>
-                <video
-                  ref={localVideoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className={isCallActive ? '' : 'local-video-full'}
-                />
-                {isVideoOff && (
-                  <div className="video-off-placeholder">
-                    <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none">
-                      <path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10"></path>
-                      <line x1="1" y1="1" x2="23" y2="23"></line>
-                    </svg>
-                    <p>Camera Off</p>
-                  </div>
-                )}
-              </>
-            ) : (
+            <video
+              ref={localVideoRef}
+              autoPlay
+              playsInline
+              muted
+              className={isCallActive ? '' : 'local-video-full'}
+              style={{ display: hasLocalVideo && !isVideoOff ? 'block' : 'none' }}
+            />
+
+            {hasLocalVideo && isVideoOff && (
+              <div className="video-off-placeholder">
+                <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none">
+                  <path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10"></path>
+                  <line x1="1" y1="1" x2="23" y2="23"></line>
+                </svg>
+                <p>Camera Off</p>
+              </div>
+            )}
+
+            {!hasLocalVideo && (
               <div className="video-off-placeholder">
                 <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none">
                   <path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10"></path>
@@ -998,89 +998,93 @@ const VideoCall = ({ socket, currentUser, targetUser, onClose, callType = 'video
       </div>
 
       {/* ── In-Call Report Modal ─────────────────────────────────────────── */}
-      {showReportModal && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-          <div style={{ background: 'white', borderRadius: '20px', width: '100%', maxWidth: 400, padding: '1.75rem', boxShadow: '0 25px 60px rgba(0,0,0,0.4)' }}>
-            {reportDone ? (
-              <div style={{ textAlign: 'center', padding: '1rem 0' }}>
-                <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>✅</div>
-                <h3 style={{ margin: '0 0 0.5rem', color: '#111827' }}>Report Submitted</h3>
-                <p style={{ margin: 0, color: '#6b7280', fontSize: '0.9rem' }}>Our moderation team has been notified and will review this call.</p>
+      {
+        showReportModal && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+            <div style={{ background: 'white', borderRadius: '20px', width: '100%', maxWidth: 400, padding: '1.75rem', boxShadow: '0 25px 60px rgba(0,0,0,0.4)' }}>
+              {reportDone ? (
+                <div style={{ textAlign: 'center', padding: '1rem 0' }}>
+                  <div style={{ fontSize: '3rem', marginBottom: '0.75rem' }}>✅</div>
+                  <h3 style={{ margin: '0 0 0.5rem', color: '#111827' }}>Report Submitted</h3>
+                  <p style={{ margin: 0, color: '#6b7280', fontSize: '0.9rem' }}>Our moderation team has been notified and will review this call.</p>
+                </div>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#111827' }}>🚩 Report This Call</h3>
+                    <button onClick={() => setShowReportModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: '#9ca3af', lineHeight: 1 }}>×</button>
+                  </div>
+                  <p style={{ margin: '0 0 1rem', fontSize: '0.85rem', color: '#6b7280' }}>Your report stays anonymous. Admins will be notified immediately.</p>
+                  <div style={{ marginBottom: '1rem' }}>
+                    <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#374151', marginBottom: '0.4rem' }}>Reason</label>
+                    <select value={reportReason} onChange={e => setReportReason(e.target.value)} style={{ width: '100%', padding: '0.65rem 0.875rem', borderRadius: '10px', border: '1.5px solid #e5e7eb', fontSize: '0.9rem', background: '#f9fafb', outline: 'none' }}>
+                      {['Harassment or Abuse', 'Inappropriate Content', 'Spam or Scam', 'Fake Profile', 'Other'].map(r => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ marginBottom: '1.25rem' }}>
+                    <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#374151', marginBottom: '0.4rem' }}>Additional details (optional)</label>
+                    <textarea value={reportDetails} onChange={e => setReportDetails(e.target.value)} rows={3} placeholder="Describe what happened..." style={{ width: '100%', padding: '0.65rem 0.875rem', borderRadius: '10px', border: '1.5px solid #e5e7eb', fontSize: '0.875rem', resize: 'none', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.75rem' }}>
+                    <button onClick={() => setShowReportModal(false)} style={{ flex: 1, padding: '0.7rem', borderRadius: '10px', border: '1.5px solid #e5e7eb', background: '#f9fafb', fontWeight: 600, cursor: 'pointer', fontSize: '0.9rem', color: '#4b5563' }}>Cancel</button>
+                    <button onClick={handleInCallReport} disabled={reportSubmitting} style={{ flex: 1, padding: '0.7rem', borderRadius: '10px', border: 'none', background: reportSubmitting ? '#f87171' : '#ef4444', color: 'white', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem' }}>
+                      {reportSubmitting ? 'Submitting...' : 'Submit Report'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )
+      }
+
+      {/* ── Post-Call Feedback Modal ─────────────────────────────────────── */}
+      {
+        showFeedback && (
+          <div style={{ position: 'fixed', bottom: 32, right: 32, zIndex: 10001, background: 'white', borderRadius: '20px', padding: '1.5rem', boxShadow: '0 20px 50px rgba(0,0,0,0.2)', maxWidth: 320, animation: 'slideUp 0.4s cubic-bezier(0.16,1,0.3,1)' }}>
+            {!feedbackGiven ? (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
+                  <div>
+                    <p style={{ margin: '0 0 0.2rem', fontWeight: 800, color: '#111827', fontSize: '1rem' }}>How was the call?</p>
+                    <p style={{ margin: 0, fontSize: '0.8rem', color: '#9ca3af' }}>Your feedback helps keep the community safe</p>
+                  </div>
+                  <button onClick={() => setShowFeedback(false)} style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: '1.3rem', cursor: 'pointer', lineHeight: 1 }}>×</button>
+                </div>
+                <div style={{ display: 'flex', gap: '0.75rem' }}>
+                  <button onClick={() => handleFeedback('thumbsUp')} style={{ flex: 1, padding: '0.875rem', borderRadius: '14px', border: '2px solid #bbf7d0', background: '#f0fdf4', color: '#10b981', display: 'flex', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.15s' }} onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'} onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}>
+                    <ThumbsUp size={28} />
+                  </button>
+                  <button onClick={() => handleFeedback('thumbsDown')} style={{ flex: 1, padding: '0.875rem', borderRadius: '14px', border: '2px solid #fecdd3', background: '#fff1f2', color: '#ef4444', display: 'flex', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.15s' }} onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'} onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}>
+                    <ThumbsDown size={28} />
+                  </button>
+                </div>
+              </>
+            ) : feedbackValue === 'thumbsUp' ? (
+              <div style={{ textAlign: 'center', padding: '0.5rem 0' }}>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.5rem' }}>
+                  <PartyPopper size={48} color="#f59e0b" />
+                </div>
+                <p style={{ margin: 0, fontWeight: 700, color: '#059669' }}>Glad it went well!</p>
               </div>
             ) : (
               <>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#111827' }}>🚩 Report This Call</h3>
-                  <button onClick={() => setShowReportModal(false)} style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', color: '#9ca3af', lineHeight: 1 }}>×</button>
+                <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.5rem' }}>
+                    <Frown size={48} color="#6b7280" />
+                  </div>
+                  <p style={{ margin: '0 0 0.25rem', fontWeight: 700, color: '#111827' }}>Sorry to hear that</p>
+                  <p style={{ margin: 0, fontSize: '0.8rem', color: '#9ca3af' }}>Would you like to report this user?</p>
                 </div>
-                <p style={{ margin: '0 0 1rem', fontSize: '0.85rem', color: '#6b7280' }}>Your report stays anonymous. Admins will be notified immediately.</p>
-                <div style={{ marginBottom: '1rem' }}>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#374151', marginBottom: '0.4rem' }}>Reason</label>
-                  <select value={reportReason} onChange={e => setReportReason(e.target.value)} style={{ width: '100%', padding: '0.65rem 0.875rem', borderRadius: '10px', border: '1.5px solid #e5e7eb', fontSize: '0.9rem', background: '#f9fafb', outline: 'none' }}>
-                    {['Harassment or Abuse', 'Inappropriate Content', 'Spam or Scam', 'Fake Profile', 'Other'].map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                </div>
-                <div style={{ marginBottom: '1.25rem' }}>
-                  <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: 700, color: '#374151', marginBottom: '0.4rem' }}>Additional details (optional)</label>
-                  <textarea value={reportDetails} onChange={e => setReportDetails(e.target.value)} rows={3} placeholder="Describe what happened..." style={{ width: '100%', padding: '0.65rem 0.875rem', borderRadius: '10px', border: '1.5px solid #e5e7eb', fontSize: '0.875rem', resize: 'none', outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }} />
-                </div>
-                <div style={{ display: 'flex', gap: '0.75rem' }}>
-                  <button onClick={() => setShowReportModal(false)} style={{ flex: 1, padding: '0.7rem', borderRadius: '10px', border: '1.5px solid #e5e7eb', background: '#f9fafb', fontWeight: 600, cursor: 'pointer', fontSize: '0.9rem', color: '#4b5563' }}>Cancel</button>
-                  <button onClick={handleInCallReport} disabled={reportSubmitting} style={{ flex: 1, padding: '0.7rem', borderRadius: '10px', border: 'none', background: reportSubmitting ? '#f87171' : '#ef4444', color: 'white', fontWeight: 700, cursor: 'pointer', fontSize: '0.9rem' }}>
-                    {reportSubmitting ? 'Submitting...' : 'Submit Report'}
-                  </button>
+                <div style={{ display: 'flex', gap: '0.625rem' }}>
+                  <button onClick={() => setShowFeedback(false)} style={{ flex: 1, padding: '0.65rem', borderRadius: '10px', border: '1.5px solid #e5e7eb', background: 'white', fontWeight: 600, cursor: 'pointer', fontSize: '0.85rem', color: '#6b7280' }}>No thanks</button>
+                  <button onClick={() => { setShowFeedback(false); setShowReportModal(true); }} style={{ flex: 1, padding: '0.65rem', borderRadius: '10px', border: 'none', background: '#ef4444', color: 'white', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}>Report User</button>
                 </div>
               </>
             )}
           </div>
-        </div>
-      )}
-
-      {/* ── Post-Call Feedback Modal ─────────────────────────────────────── */}
-      {showFeedback && (
-        <div style={{ position: 'fixed', bottom: 32, right: 32, zIndex: 10001, background: 'white', borderRadius: '20px', padding: '1.5rem', boxShadow: '0 20px 50px rgba(0,0,0,0.2)', maxWidth: 320, animation: 'slideUp 0.4s cubic-bezier(0.16,1,0.3,1)' }}>
-          {!feedbackGiven ? (
-            <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
-                <div>
-                  <p style={{ margin: '0 0 0.2rem', fontWeight: 800, color: '#111827', fontSize: '1rem' }}>How was the call?</p>
-                  <p style={{ margin: 0, fontSize: '0.8rem', color: '#9ca3af' }}>Your feedback helps keep the community safe</p>
-                </div>
-                <button onClick={() => setShowFeedback(false)} style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: '1.3rem', cursor: 'pointer', lineHeight: 1 }}>×</button>
-              </div>
-              <div style={{ display: 'flex', gap: '0.75rem' }}>
-                <button onClick={() => handleFeedback('thumbsUp')} style={{ flex: 1, padding: '0.875rem', borderRadius: '14px', border: '2px solid #bbf7d0', background: '#f0fdf4', color: '#10b981', display: 'flex', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.15s' }} onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'} onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}>
-                  <ThumbsUp size={28} />
-                </button>
-                <button onClick={() => handleFeedback('thumbsDown')} style={{ flex: 1, padding: '0.875rem', borderRadius: '14px', border: '2px solid #fecdd3', background: '#fff1f2', color: '#ef4444', display: 'flex', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.15s' }} onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'} onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}>
-                  <ThumbsDown size={28} />
-                </button>
-              </div>
-            </>
-          ) : feedbackValue === 'thumbsUp' ? (
-            <div style={{ textAlign: 'center', padding: '0.5rem 0' }}>
-              <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.5rem' }}>
-                <PartyPopper size={48} color="#f59e0b" />
-              </div>
-              <p style={{ margin: 0, fontWeight: 700, color: '#059669' }}>Glad it went well!</p>
-            </div>
-          ) : (
-            <>
-              <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '0.5rem' }}>
-                  <Frown size={48} color="#6b7280" />
-                </div>
-                <p style={{ margin: '0 0 0.25rem', fontWeight: 700, color: '#111827' }}>Sorry to hear that</p>
-                <p style={{ margin: 0, fontSize: '0.8rem', color: '#9ca3af' }}>Would you like to report this user?</p>
-              </div>
-              <div style={{ display: 'flex', gap: '0.625rem' }}>
-                <button onClick={() => setShowFeedback(false)} style={{ flex: 1, padding: '0.65rem', borderRadius: '10px', border: '1.5px solid #e5e7eb', background: 'white', fontWeight: 600, cursor: 'pointer', fontSize: '0.85rem', color: '#6b7280' }}>No thanks</button>
-                <button onClick={() => { setShowFeedback(false); setShowReportModal(true); }} style={{ flex: 1, padding: '0.65rem', borderRadius: '10px', border: 'none', background: '#ef4444', color: 'white', fontWeight: 700, cursor: 'pointer', fontSize: '0.85rem' }}>Report User</button>
-              </div>
-            </>
-          )}
-        </div>
-      )}
+        )
+      }
 
       <style>{`
         .video-call-overlay {
@@ -1148,31 +1152,6 @@ const VideoCall = ({ socket, currentUser, targetUser, onClose, callType = 'video
           object-fit: cover;
         }
 
-        .remote-video-pip {
-          position: absolute;
-          bottom: 110px;
-          right: 230px; /* 32px + 180px + 18px margin */
-          width: 180px;
-          height: 270px;
-          border-radius: 16px;
-          overflow: hidden;
-          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6);
-          border: 2px solid #3b82f6; /* Blue border to distinguish from local */
-          z-index: 10;
-          transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-          background: #1e293b;
-        }
-
-        .remote-video-pip.sidebar-active {
-          right: 538px; /* 340px + 180px + 18px margin */
-        }
-        
-        .remote-video-pip .avatar-pulse {
-          width: 60px !important;
-          height: 60px !important;
-          font-size: 1.5rem !important;
-        }
-
         .local-video-pip {
           position: absolute;
           bottom: 110px;
@@ -1197,19 +1176,6 @@ const VideoCall = ({ socket, currentUser, targetUser, onClose, callType = 'video
             right: 20px;
             border-radius: 12px;
             border-width: 1px;
-          }
-          
-          .remote-video-pip {
-            width: 110px;
-            height: 165px;
-            bottom: 100px;
-            right: 140px; /* 20 + 110 + 10 margin */
-            border-radius: 12px;
-            border-width: 1px;
-          }
-          
-          .remote-video-pip.sidebar-active {
-            right: 140px; /* Keep same on mobile due to bottom sheet layout */
           }
         }
 
@@ -1586,7 +1552,7 @@ const VideoCall = ({ socket, currentUser, targetUser, onClose, callType = 'video
           transform: scale(1.15) translateY(-4px);
         }
       `}</style>
-    </div>
+    </div >
   );
 };
 
