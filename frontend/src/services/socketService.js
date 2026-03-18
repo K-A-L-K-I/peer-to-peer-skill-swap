@@ -29,7 +29,7 @@ class SocketService {
 
     this.socket = io(socketUrl, {
       auth: { token },
-      transports: ['polling', 'websocket'], // Try polling first, upgrade to WS
+      transports: ['websocket', 'polling'], // WS-first: avoids mid-call transport upgrade
       reconnection: true,
       reconnectionAttempts: 5,
       reconnectionDelay: 1000,

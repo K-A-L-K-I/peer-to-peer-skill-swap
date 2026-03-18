@@ -371,7 +371,16 @@ function ChatPage() {
         unreadCount: 0,
         isOnline: false
       }));
-      setChats(accepted);
+      // Merge into existing array to preserve the chat during an active call.
+      // Don't wipe the list while a video call is in progress.
+      setChats(prev => {
+        if (prev.length === 0) return accepted;
+        // Preserve unreadCount / lastMessage from live state, just refresh structure
+        return accepted.map(fresh => {
+          const existing = prev.find(p => p._id === fresh._id);
+          return existing ? { ...fresh, unreadCount: existing.unreadCount, lastMessage: existing.lastMessage } : fresh;
+        });
+      });
     } catch (err) {
       console.error('Failed to load chats:', err);
     } finally {
@@ -394,31 +403,40 @@ function ChatPage() {
     }
   }, []);
 
+  // Ref to track which incomingCall callId we've already handled, so we never
+  // double-fire this effect when chats reloads or showVideoCall changes.
+  const handledIncomingCallId = useRef(null);
+
   // Handle incoming call passed via navigation state (from global AppLayout popup)
   useEffect(() => {
     const incoming = location.state?.incomingCall;
-    if (incoming && !showVideoCall && chats.length > 0) {
-      console.log('📱 [ChatPage] Incoming call from navigation state:', incoming);
-      setIncomingCallForVideoCall(incoming);
-      setCallType(incoming.callType || 'video');
-      setShowVideoCall(true);
+    if (!incoming) return;
+    // Already handled this callId — skip
+    if (handledIncomingCallId.current === incoming.callId) return;
+    // Wait until chats are loaded before processing
+    if (chats.length === 0) return;
 
-      // Switch to the chat with the caller so targetUser is correct
-      const chatWithCaller = chats.find(c => {
-        const reqId = typeof c.requester === 'object' ? c.requester._id : c.requester;
-        const provId = typeof c.provider === 'object' ? c.provider._id : c.provider;
-        return String(reqId) === String(incoming.from) || String(provId) === String(incoming.from);
-      });
+    handledIncomingCallId.current = incoming.callId;
+    console.log('📱 [ChatPage] Incoming call from navigation state:', incoming);
+    setIncomingCallForVideoCall(incoming);
+    setCallType(incoming.callType || 'video');
+    setShowVideoCall(true);
 
-      if (chatWithCaller) {
-        setActiveChatId(chatWithCaller._id);
-        navigate('/chat', { replace: true, state: { swapRequestId: chatWithCaller._id } });
-      } else {
-        // Clear from location state
-        navigate('/chat', { replace: true, state: { swapRequestId: activeChatId } });
-      }
+    // Switch to the chat with the caller so targetUser is correct
+    const chatWithCaller = chats.find(c => {
+      const reqId = typeof c.requester === 'object' ? c.requester._id : c.requester;
+      const provId = typeof c.provider === 'object' ? c.provider._id : c.provider;
+      return String(reqId) === String(incoming.from) || String(provId) === String(incoming.from);
+    });
+
+    if (chatWithCaller) {
+      setActiveChatId(chatWithCaller._id);
+      navigate('/chat', { replace: true, state: { swapRequestId: chatWithCaller._id } });
+    } else {
+      navigate('/chat', { replace: true, state: {} });
     }
-  }, [location.state?.incomingCall, showVideoCall, chats, activeChatId, navigate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state?.incomingCall, chats]);
 
   // Socket setup
   useEffect(() => {
@@ -1100,26 +1118,6 @@ function ChatPage() {
               </div>
             </form>
 
-            {/* Video Call Overlay */}
-            {showVideoCall && (
-              <div style={{
-                position: 'absolute',
-                inset: 0,
-                zIndex: 50
-              }}>
-                <VideoCall
-                  socket={socketService.getSocket()}
-                  currentUser={currentUser}
-                  targetUser={otherUser}
-                  callType={callType}
-                  onClose={() => {
-                    setShowVideoCall(false);
-                    setIncomingCallForVideoCall(null);
-                  }}
-                  incomingCall={incomingCallForVideoCall}
-                />
-              </div>
-            )}
           </>
         ) : (
           /* Empty State - No Chat Selected */
@@ -1161,9 +1159,30 @@ function ChatPage() {
               Choose a chat from the sidebar to start messaging with your skill swap partners
             </p>
           </div>
-        )
-        }
-      </div >
+        )}
+
+        {/* Video Call Overlay — lives OUTSIDE the activeChat gate so it can't be
+            killed by a momentary chats reload or activeChatId change */}
+        {showVideoCall && (
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 50
+          }}>
+            <VideoCall
+              socket={socketService.getSocket()}
+              currentUser={currentUser}
+              targetUser={otherUser}
+              callType={callType}
+              onClose={() => {
+                setShowVideoCall(false);
+                setIncomingCallForVideoCall(null);
+              }}
+              incomingCall={incomingCallForVideoCall}
+            />
+          </div>
+        )}
+      </div>
 
       {/* Schedule Meeting Modal */}
       {
