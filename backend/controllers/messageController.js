@@ -79,10 +79,19 @@ const sendMessage = async (req, res) => {
     // Broadcast with tempId so sender can match it
     const io = req.app.get('io');
     if (io) {
-      io.to(`chat-${swapRequestId}`).emit('new-message', {
+      const messagePayload = {
         ...populatedMessage.toObject(),
         tempId: tempId || null // Include tempId for sender to identify
-      });
+      };
+
+      // Emit to the specific chat room (useful if both users are actively viewing this chat)
+      io.to(`chat-${swapRequestId}`).emit('new-message', messagePayload);
+
+      // Also emit strictly to the receiver's personal room so they get it even if viewing another chat
+      io.to(`user-${receiverId}`).emit('new-message', messagePayload);
+
+      // Trigger the topbar notification bell specifically for the receiver
+      io.to(`user-${receiverId}`).emit('new-notification');
     }
 
     return res.status(201).json({
