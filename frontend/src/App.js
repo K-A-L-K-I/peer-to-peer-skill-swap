@@ -7,6 +7,7 @@ import useAuthStore from './store/authStore';
 import { ToastProvider } from './context/ToastContext';
 
 import Sidebar from './components/Sidebar';
+import Topbar from './components/Topbar';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
@@ -242,14 +243,18 @@ function AppLayout({ children }) {
   }, [incomingCallData]);
 
   return (
-    <div className="app-modern layout-sidebar">
-      {token && <Sidebar user={user} onLogout={logout} />}
+    <div className="app-modern layout-enterprise">
+      {token && <Topbar user={user} onLogout={logout} />}
 
-      <main className={`main-content ${token ? 'main-with-sidebar' : ''}`}>
-        <div className="page-container animate-fade-in-up">
-          {children}
-        </div>
-      </main>
+      <div className="enterprise-body">
+        {token && <Sidebar user={user} onLogout={logout} />}
+
+        <main className={`main-content ${token ? 'main-with-sidebar' : ''}`}>
+          <div className="page-container animate-fade-in-up">
+            {children}
+          </div>
+        </main>
+      </div>
 
       {/* ── Global Incoming Call Popup (works on any page) ── */}
       {token && (

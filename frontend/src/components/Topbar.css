@@ -1,0 +1,235 @@
+.topbar {
+    height: 70px;
+    width: 100%;
+    background-color: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2rem;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.topbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    text-decoration: none;
+    width: 280px;
+    /* Matches sidebar width minus padding */
+}
+
+.topbar-logo {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+    border-radius: 10px;
+    padding: 4px;
+    box-shadow: 0 2px 4px rgba(59, 130, 246, 0.3);
+}
+
+.topbar-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: brightness(0) invert(1);
+}
+
+.topbar-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #0f172a;
+    letter-spacing: -0.02em;
+}
+
+.topbar-search {
+    flex: 1;
+    max-width: 500px;
+    margin: 0 2rem;
+}
+
+.search-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    background-color: #f1f5f9;
+    border-radius: 20px;
+    padding: 0.5rem 1rem;
+    transition: all 0.2s ease;
+}
+
+.search-input-wrapper:focus-within {
+    background-color: #ffffff;
+    box-shadow: 0 0 0 2px #3b82f6;
+}
+
+.search-icon {
+    color: #64748b;
+    margin-right: 8px;
+}
+
+.search-input-wrapper input {
+    border: none;
+    background: transparent;
+    width: 100%;
+    font-size: 0.95rem;
+    color: #334155;
+    outline: none;
+}
+
+.search-input-wrapper input::placeholder {
+    color: #94a3b8;
+}
+
+.topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.topbar-notifications-wrapper {
+    position: relative;
+}
+
+.topbar-btn {
+    background: transparent;
+    border: none;
+    color: #64748b;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.topbar-btn:hover,
+.topbar-btn.active {
+    background-color: #f1f5f9;
+    color: #0f172a;
+}
+
+.topbar-badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background-color: #ef4444;
+    color: white;
+    font-size: 0.7rem;
+    font-weight: 700;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid white;
+    padding: 0 4px;
+}
+
+.topbar-dropdown-container {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: -10px;
+    z-index: 1001;
+    animation: fadeInDown 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeInDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.topbar-divider {
+    width: 1px;
+    height: 24px;
+    background-color: #e2e8f0;
+    margin: 0 0.5rem;
+}
+
+.topbar-user {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.topbar-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%);
+    border: 2px solid #ffffff;
+    box-shadow: 0 0 0 1px #e2e8f0;
+}
+
+.topbar-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.topbar-avatar-fallback {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    color: #4338ca;
+    font-size: 0.9rem;
+}
+
+.topbar-logout {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    transition: all 0.2s;
+    margin-left: 0.5rem;
+}
+
+.topbar-logout:hover {
+    background-color: #fee2e2;
+    color: #ef4444;
+}
+
+/* Base Layout Modifications for App.js */
+.layout-enterprise {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100%;
+    overflow: hidden;
+    background-color: #f8fafc;
+}
+
+.enterprise-body {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+}

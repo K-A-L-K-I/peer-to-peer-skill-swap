@@ -5,6 +5,7 @@ const Whiteboard = ({ webrtcService }) => {
     const canvasRef = useRef(null);
     const contextRef = useRef(null);
     const containerRef = useRef(null);
+    const lastDrawTimeRef = useRef(0);
     const [isDrawing, setIsDrawing] = useState(false);
     const [color, setColor] = useState('#3b82f6'); // Default primary blue
     const [lineWidth, setLineWidth] = useState(3);
@@ -121,6 +122,27 @@ const Whiteboard = ({ webrtcService }) => {
         contextRef.current.beginPath();
         contextRef.current.moveTo(coords.x, coords.y);
         setIsDrawing(true);
+        lastDrawTimeRef.current = Date.now(); // Reset throttle timer on click
+
+        const currentDrawColor = isEraser ? '#ffffff' : color;
+        const currentWidth = isEraser ? lineWidth * 3 : lineWidth;
+
+        // Broadcast the start point
+        if (webrtcService && webrtcService.dataChannel && webrtcService.dataChannel.readyState === 'open') {
+            const canvas = canvasRef.current;
+            const rect = canvas.getBoundingClientRect();
+
+            webrtcService.sendData({
+                type: 'draw',
+                payload: {
+                    x: coords.x / rect.width,
+                    y: coords.y / rect.height,
+                    color: currentDrawColor,
+                    width: currentWidth,
+                    isNewStroke: true
+                }
+            });
+        }
     };
 
     const finishDrawing = () => {
@@ -143,24 +165,28 @@ const Whiteboard = ({ webrtcService }) => {
         contextRef.current.lineTo(coords.x, coords.y);
         contextRef.current.stroke();
 
-        // Broadcast stroke to remote peer
-        if (webrtcService && webrtcService.dataChannel && webrtcService.dataChannel.readyState === 'open') {
-            // Normalize coordinates as percentages so they scale correctly on different sized screens
-            const canvas = canvasRef.current;
-            const rect = canvas.getBoundingClientRect();
+        // Broadcast stroke to remote peer with throttle to prevent network flooding
+        const now = Date.now();
+        if (now - lastDrawTimeRef.current > 40) {
+            lastDrawTimeRef.current = now;
+            if (webrtcService && webrtcService.dataChannel && webrtcService.dataChannel.readyState === 'open') {
+                // Normalize coordinates as percentages so they scale correctly on different sized screens
+                const canvas = canvasRef.current;
+                const rect = canvas.getBoundingClientRect();
 
-            const payload = {
-                x: coords.x / rect.width,
-                y: coords.y / rect.height,
-                color: currentDrawColor,
-                width: contextRef.current.lineWidth,
-                isNewStroke: false // Tells the remote end whether to moveTo or lineTo
-            };
+                const payload = {
+                    x: coords.x / rect.width,
+                    y: coords.y / rect.height,
+                    color: currentDrawColor,
+                    width: contextRef.current.lineWidth,
+                    isNewStroke: false // Tells the remote end whether to moveTo or lineTo
+                };
 
-            webrtcService.sendData({
-                type: 'draw',
-                payload
-            });
+                webrtcService.sendData({
+                    type: 'draw',
+                    payload
+                });
+            }
         }
     };
 
@@ -179,10 +205,15 @@ const Whiteboard = ({ webrtcService }) => {
         contextRef.current.strokeStyle = payload.color;
         contextRef.current.lineWidth = payload.width;
 
-        contextRef.current.lineTo(localX, localY);
-        contextRef.current.stroke();
-        contextRef.current.beginPath();
-        contextRef.current.moveTo(localX, localY);
+        if (payload.isNewStroke) {
+            contextRef.current.beginPath();
+            contextRef.current.moveTo(localX, localY);
+        } else {
+            contextRef.current.lineTo(localX, localY);
+            contextRef.current.stroke();
+            contextRef.current.beginPath();
+            contextRef.current.moveTo(localX, localY);
+        }
     };
 
     const clearCanvasLocal = () => {

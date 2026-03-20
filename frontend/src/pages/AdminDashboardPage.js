@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Users, Ban, AlertTriangle, CheckCircle, RefreshCw, Shield, MessageSquare, X } from 'lucide-react';
+import { Users, Ban, AlertTriangle, CheckCircle, RefreshCw, Shield, MessageSquare, X, Lock, Unlock, Settings2 } from 'lucide-react';
 import api from '../services/api';
 import ConfirmDialog from '../components/ConfirmDialog';
 import './AdminDashboard.css';
@@ -164,7 +164,7 @@ function AdminDashboardPage() {
           <h1 className="admin-title">Admin Dashboard</h1>
           <p className="admin-subtitle">Platform overview and user moderation</p>
         </div>
-        <button className="btn btn-secondary" onClick={fetchDashboardData} disabled={loading}>
+        <button className="btn-primary" onClick={fetchDashboardData} disabled={loading}>
           <RefreshCw size={15} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
           {loading ? 'Refreshing…' : 'Refresh'}
         </button>
@@ -253,6 +253,7 @@ function AdminDashboardPage() {
                           onClick={() => toggleBlock(user._id, !user.isBlocked, user.name)}
                           disabled={actionLoading[user._id]}
                         >
+                          {user.isBlocked ? <Unlock size={14} /> : <Lock size={14} />}
                           {actionLoading[user._id] ? 'Processing…' : (user.isBlocked ? 'Unblock' : 'Block')}
                         </button>
                       )}
@@ -326,7 +327,7 @@ function AdminDashboardPage() {
                             className="btn-action edit"
                             onClick={() => setReportActionData({ id: report._id, status: report.status, note: report.resolutionNote || '' })}
                           >
-                            Moderate
+                            <Settings2 size={14} /> Moderate
                           </button>
                         )}
                       </div>

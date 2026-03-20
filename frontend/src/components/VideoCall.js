@@ -3,7 +3,7 @@ import webrtcService from '../services/webrtcService';
 import Whiteboard from './Whiteboard';
 import InCallChat from './InCallChat';
 import api from '../services/api';
-import { Heart, ThumbsUp, ThumbsDown, PartyPopper, Lightbulb, Flame, Smile, Flag, CheckCircle2, Frown } from 'lucide-react';
+import { Heart, ThumbsUp, ThumbsDown, PartyPopper, Lightbulb, Flame, Smile, Flag, CheckCircle2, Frown, Minimize2, Maximize2 } from 'lucide-react';
 
 const EMOJI_COMPONENTS = {
   '👏': <PartyPopper size={24} color="#f59e0b" />,
@@ -17,7 +17,6 @@ const EMOJI_COMPONENTS = {
 const VideoCall = ({ socket, currentUser, targetUser, onClose, callType = 'video', incomingCall = null }) => {
   const [connectionState, setConnectionState] = useState('idle');
   const [error, setError] = useState(null);
-  const [callDuration, setCallDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
   const [isVideoOff, setIsVideoOff] = useState(false);
   const [callId, setCallId] = useState(null);
@@ -34,6 +33,7 @@ const VideoCall = ({ socket, currentUser, targetUser, onClose, callType = 'video
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [emojis, setEmojis] = useState([]);
   const [isPipAvailable, setIsPipAvailable] = useState(false);
+  const [isLocalVideoMinimized, setIsLocalVideoMinimized] = useState(false);
   const [networkQuality, setNetworkQuality] = useState('excellent');
   const [isRemoteObserverMode, setIsRemoteObserverMode] = useState(false);
 
@@ -51,13 +51,13 @@ const VideoCall = ({ socket, currentUser, targetUser, onClose, callType = 'video
 
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
-  const timerRef = useRef(null);
   const hasEndedRef = useRef(false);
   const socketRef = useRef(socket);
   const hasStartedCall = useRef(false);
   const pendingOfferRef = useRef(null);
   const remoteCheckInterval = useRef(null);
   const callIdRef = useRef(null);
+  const callStartTimeRef = useRef(null);
 
   // Keep socket reference updated
   useEffect(() => {
@@ -66,7 +66,6 @@ const VideoCall = ({ socket, currentUser, targetUser, onClose, callType = 'video
   }, [socket]);
 
   const cleanup = useCallback(() => {
-    stopTimer();
     if (remoteCheckInterval.current) {
       clearInterval(remoteCheckInterval.current);
       remoteCheckInterval.current = null;
@@ -249,7 +248,7 @@ const VideoCall = ({ socket, currentUser, targetUser, onClose, callType = 'video
         await webrtcService.setRemoteDescription(data.answer);
         startRemoteStreamCheck();
         setConnectionState('connected');
-        startTimer();
+        if (!callStartTimeRef.current) callStartTimeRef.current = Date.now();
       } catch (err) {
         console.error('❌ Error in call accepted:', err);
         setError('Connection failed: ' + err.message);
@@ -266,13 +265,12 @@ const VideoCall = ({ socket, currentUser, targetUser, onClose, callType = 'video
     const handleCallConnected = () => {
       console.log('📞 Call connected event received');
       setConnectionState('connected');
-      startTimer();
+      if (!callStartTimeRef.current) callStartTimeRef.current = Date.now();
       startRemoteStreamCheck();
     };
 
     const handleCallEnded = (data) => {
       setConnectionState('ended');
-      stopTimer();
       hasEndedRef.current = true;
     };
 
@@ -477,6 +475,7 @@ const VideoCall = ({ socket, currentUser, targetUser, onClose, callType = 'video
     cleanup();
     setConnectionState('ended');
     // Show post-call feedback after a brief delay
+    const callDuration = callStartTimeRef.current ? Math.floor((Date.now() - callStartTimeRef.current) / 1000) : 0;
     if (callDuration > 10) {
       setTimeout(() => setShowFeedback(true), 800);
     }
@@ -588,24 +587,22 @@ const VideoCall = ({ socket, currentUser, targetUser, onClose, callType = 'video
     }
   };
 
-  const startTimer = () => {
-    stopTimer();
-    timerRef.current = setInterval(() => {
-      setCallDuration(p => p + 1);
-    }, 1000);
-  };
-
-  const stopTimer = () => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-  };
-
   const formatDuration = (secs) => {
     const mins = Math.floor(secs / 60);
     const remainingSecs = secs % 60;
     return `${mins.toString().padStart(2, '0')}:${remainingSecs.toString().padStart(2, '0')}`;
+  };
+
+  const CallTimerDisplay = ({ isAudioOnly, startTime }) => {
+    const [duration, setDuration] = useState(0);
+    useEffect(() => {
+      if (!startTime) return;
+      const interval = setInterval(() => {
+        setDuration(Math.floor((Date.now() - startTime) / 1000));
+      }, 1000);
+      return () => clearInterval(interval);
+    }, [startTime]);
+    return <>{isAudioOnly ? `Audio Call - ${formatDuration(duration)}` : formatDuration(duration)}</>;
   };
 
   const renderStatus = () => {
@@ -615,7 +612,7 @@ const VideoCall = ({ socket, currentUser, targetUser, onClose, callType = 'video
       case 'ringing': return 'Ringing...';
       case 'receiving': return 'Incoming...';
       case 'connecting': return 'Connecting...';
-      case 'connected': return isAudioOnly ? `Audio Call - ${formatDuration(callDuration)}` : formatDuration(callDuration);
+      case 'connected': return <CallTimerDisplay isAudioOnly={isAudioOnly} startTime={callStartTimeRef.current} />;
       case 'ended': return 'Ended';
       case 'error': return 'Error';
       default: return '';
@@ -729,17 +726,54 @@ const VideoCall = ({ socket, currentUser, targetUser, onClose, callType = 'video
           )}
 
           {/* Local Video — video element always in DOM so localVideoRef stays valid */}
-          <div className={isCallActive ? (isWhiteboardActive || isSidebarOpen ? 'local-video-pip sidebar-active' : 'local-video-pip') : 'local-video-container'}>
+          <div
+            className={isCallActive ? (isWhiteboardActive || isSidebarOpen ? 'local-video-pip sidebar-active' : 'local-video-pip') : 'local-video-container'}
+            style={isLocalVideoMinimized && isCallActive ? {
+              width: '80px', height: '80px', minHeight: '80px', borderRadius: '50%',
+              overflow: 'hidden', cursor: 'pointer', padding: 0
+            } : {}}
+            onClick={() => isLocalVideoMinimized && isCallActive && setIsLocalVideoMinimized(false)}
+            title={isLocalVideoMinimized ? "Click to maximize your video" : ""}
+          >
+            {isCallActive && !isLocalVideoMinimized && (
+              <button
+                onClick={(e) => { e.stopPropagation(); setIsLocalVideoMinimized(true); }}
+                style={{
+                  position: 'absolute', top: '8px', right: '8px', zIndex: 10,
+                  background: 'rgba(0,0,0,0.6)', color: 'white', border: 'none',
+                  borderRadius: '4px', padding: '4px', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center'
+                }}
+                title="Minimize my video"
+              >
+                <Minimize2 size={16} />
+              </button>
+            )}
+
+            {isCallActive && isLocalVideoMinimized && (
+              <div style={{
+                position: 'absolute', inset: 0,
+                background: 'rgba(0,0,0,0.4)', color: 'white',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                zIndex: 5, pointerEvents: 'none'
+              }}>
+                <Maximize2 size={24} opacity={0.8} />
+              </div>
+            )}
+
             <video
               ref={localVideoRef}
               autoPlay
               playsInline
               muted
               className={isCallActive ? '' : 'local-video-full'}
-              style={{ display: hasLocalVideo && !isVideoOff ? 'block' : 'none' }}
+              style={{
+                display: hasLocalVideo && !isVideoOff ? 'block' : 'none',
+                ...(isLocalVideoMinimized && isCallActive ? { width: '100%', height: '100%', objectFit: 'cover' } : {})
+              }}
             />
 
-            {hasLocalVideo && isVideoOff && (
+            {hasLocalVideo && isVideoOff && !isLocalVideoMinimized && (
               <div className="video-off-placeholder">
                 <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none">
                   <path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10"></path>
@@ -749,7 +783,7 @@ const VideoCall = ({ socket, currentUser, targetUser, onClose, callType = 'video
               </div>
             )}
 
-            {!hasLocalVideo && (
+            {!hasLocalVideo && !isLocalVideoMinimized && (
               <div className="video-off-placeholder">
                 <svg viewBox="0 0 24 24" width="32" height="32" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none">
                   <path d="M16 16v1a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2m5.66 0H14a2 2 0 0 1 2 2v3.34l1 1L23 7v10"></path>
