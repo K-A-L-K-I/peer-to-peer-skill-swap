@@ -251,7 +251,10 @@ function AppLayout({ children }) {
         {token && <Sidebar user={user} onLogout={logout} />}
 
         <main className={`main-content ${token && !location.pathname.startsWith('/chat') ? 'main-with-sidebar' : ''}`}>
-          <div className="page-container animate-fade-in-up" style={{ maxWidth: location.pathname.startsWith('/chat') ? '100%' : '1400px' }}>
+          <div className="page-container animate-fade-in-up" style={{
+            maxWidth: location.pathname.startsWith('/chat') ? '100%' : '1400px',
+            height: location.pathname.startsWith('/chat') ? '100%' : 'auto'
+          }}>
             {children}
           </div>
         </main>
