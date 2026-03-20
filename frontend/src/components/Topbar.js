@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import socketService from '../services/socketService';
 import NotificationDropdown from './NotificationDropdown';
-import { Bell, LogOut, Search } from 'lucide-react';
+import { Bell, LogOut } from 'lucide-react';
 import './Topbar.css';
 
 const Topbar = ({ user, onLogout }) => {
@@ -48,13 +48,6 @@ const Topbar = ({ user, onLogout }) => {
                 <span className="topbar-title">SkillSwap</span>
             </div>
 
-            {/* Middle Section (Search / Global Actions) */}
-            <div className="topbar-search">
-                <div className="search-input-wrapper">
-                    <Search size={18} className="search-icon" />
-                    <input type="text" placeholder="Search skills, users..." onClick={() => navigate('/search')} />
-                </div>
-            </div>
 
             {/* Right Section (User Actions) */}
             <div className="topbar-actions">

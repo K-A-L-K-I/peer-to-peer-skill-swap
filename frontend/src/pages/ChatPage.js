@@ -722,7 +722,7 @@ function ChatPage() {
       overflow: 'hidden'
     }}>
       {/* ==================== SIDEBAR ==================== */}
-      <div style={{
+      <div className={`chat-list-container ${showSidebar ? 'show' : 'hide'}`} style={{
         width: showSidebar ? '420px' : '0',
         minWidth: showSidebar ? '420px' : '0',
         background: 'white',
@@ -820,7 +820,7 @@ function ChatPage() {
       </div>
 
       {/* ==================== MAIN CHAT AREA ==================== */}
-      <div style={{
+      <div className={`chat-main-container ${!showSidebar ? 'show' : 'hide'}`} style={{
         flex: 1,
         display: 'flex',
         flexDirection: 'column',

@@ -233,3 +233,46 @@
     overflow: hidden;
     position: relative;
 }
+
+/* ==========================================
+   MOBILE TOPBAR ADJUSTMENTS
+   ========================================== */
+@media (max-width: 768px) {
+    .topbar {
+        padding: 0 1rem;
+        height: 60px;
+    }
+
+    .topbar-brand {
+        width: auto;
+    }
+
+    .topbar-title {
+        display: none;
+        /* Hide 'SkillSwap' text to save space */
+    }
+
+    .topbar-search {
+        margin: 0 0.5rem;
+    }
+
+    .search-input-wrapper {
+        padding: 0.4rem 0.8rem;
+    }
+
+    .search-input-wrapper input {
+        font-size: 0.85rem;
+    }
+
+    .topbar-actions {
+        gap: 0.5rem;
+    }
+
+    .topbar-divider {
+        display: none;
+    }
+
+    .topbar-logout {
+        margin-left: 0;
+    }
+}

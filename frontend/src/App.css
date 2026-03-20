@@ -1417,3 +1417,36 @@ body,
 .modal-actions button {
   padding: 0.75rem 1.5rem;
 }
+
+/* ==========================================
+   MOBILE GLOBAL APP & CHAT ADJUSTMENTS
+   ========================================== */
+@media (max-width: 768px) {
+
+  /* Leave room for the new Bottom Navigation Bar */
+  .main-content {
+    height: calc(100% - 64px) !important;
+  }
+
+  /* Chat Page Mobile Single Column Toggle */
+  .chat-list-container.show {
+    width: 100% !important;
+    min-width: 100% !important;
+    display: flex !important;
+  }
+
+  .chat-list-container.hide {
+    display: none !important;
+    width: 0 !important;
+    min-width: 0 !important;
+  }
+
+  .chat-main-container.show {
+    width: 100% !important;
+    display: flex !important;
+  }
+
+  .chat-main-container.hide {
+    display: none !important;
+  }
+}
