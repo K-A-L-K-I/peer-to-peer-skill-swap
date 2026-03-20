@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import './styles/design-system.css';
 import './App.css';
 import { setAuthToken, initializeSocket, registerSocket, socketService } from './services/api';
@@ -156,6 +156,7 @@ function AppLayout({ children }) {
   const addOnlineUser = useAuthStore(state => state.addOnlineUser);
   const removeOnlineUser = useAuthStore(state => state.removeOnlineUser);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [incomingCallData, setIncomingCallData] = useState(null);
 
@@ -249,8 +250,8 @@ function AppLayout({ children }) {
       <div className="enterprise-body">
         {token && <Sidebar user={user} onLogout={logout} />}
 
-        <main className={`main-content ${token ? 'main-with-sidebar' : ''}`}>
-          <div className="page-container animate-fade-in-up">
+        <main className={`main-content ${token && !location.pathname.startsWith('/chat') ? 'main-with-sidebar' : ''}`}>
+          <div className="page-container animate-fade-in-up" style={{ maxWidth: location.pathname.startsWith('/chat') ? '100%' : '1400px' }}>
             {children}
           </div>
         </main>

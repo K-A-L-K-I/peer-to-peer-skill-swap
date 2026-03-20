@@ -540,7 +540,7 @@ function ChatPage() {
 
   // Scroll to bottom
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [messages, otherUserTyping]);
 
   // Handle input change with typing indicator
@@ -717,7 +717,7 @@ function ChatPage() {
   return (
     <div style={{
       display: 'flex',
-      height: 'calc(100vh - 72px)',
+      height: '100%',
       background: '#f9fafb',
       overflow: 'hidden'
     }}>
