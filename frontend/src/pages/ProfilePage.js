@@ -247,10 +247,10 @@ function ProfilePage() {
         <div style={{ background: 'white', borderRadius: '0 0 24px 24px', boxShadow: '0 20px 50px -10px rgba(17,24,39,0.1)', padding: '0 2.5rem 2.5rem' }}>
 
           {/* Avatar row */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: -60, paddingBottom: '1.75rem', borderBottom: '1px solid #f3f4f6' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '1.25rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', paddingBottom: '1.75rem', borderBottom: '1px solid #f3f4f6' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1.25rem' }}>
               {/* Avatar */}
-              <div style={{ position: 'relative' }}>
+              <div style={{ position: 'relative', marginTop: -60 }}>
                 <div
                   style={{
                     width: 120, height: 120, borderRadius: '50%',
@@ -286,7 +286,7 @@ function ProfilePage() {
 
               {/* Name + quick meta under avatar */}
               {!isEditing && (
-                <div style={{ paddingBottom: '0.5rem' }}>
+                <div style={{ paddingTop: '0.5rem', paddingBottom: '0.5rem' }}>
                   <h1 style={{ margin: '0 0 0.2rem', fontSize: '1.85rem', fontWeight: 900, color: '#111827', letterSpacing: '-0.03em' }}>
                     {userData.name}
                   </h1>
