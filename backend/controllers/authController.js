@@ -486,6 +486,33 @@ const updateUserProfile = async (req, res) => {
       bio, location, timezone, availableForSwap, coverImage, socialLinks
     } = req.body;
 
+    let finalProfilePicture = profilePicture;
+    let finalCoverImage = coverImage;
+
+    let parsedSkillsOffered = skillsOffered;
+    let parsedSkillsWanted = skillsWanted;
+    let parsedSocialLinks = socialLinks;
+
+    if (typeof skillsOffered === 'string') {
+      try { parsedSkillsOffered = JSON.parse(skillsOffered); } catch (e) { parsedSkillsOffered = [skillsOffered]; }
+    }
+    if (typeof skillsWanted === 'string') {
+      try { parsedSkillsWanted = JSON.parse(skillsWanted); } catch (e) { parsedSkillsWanted = [skillsWanted]; }
+    }
+    if (typeof socialLinks === 'string') {
+      try { parsedSocialLinks = JSON.parse(socialLinks); } catch (e) { parsedSocialLinks = {}; }
+    }
+
+    // Handle uploaded files via multer
+    if (req.files) {
+      if (req.files.profilePicture && req.files.profilePicture[0]) {
+        finalProfilePicture = `/uploads/${req.files.profilePicture[0].filename}`;
+      }
+      if (req.files.coverImage && req.files.coverImage[0]) {
+        finalCoverImage = `/uploads/${req.files.coverImage[0].filename}`;
+      }
+    }
+
     const user = await User.findById(req.user._id);
     if (!user) return res.status(404).json({ message: 'User not found' });
 
@@ -510,22 +537,22 @@ const updateUserProfile = async (req, res) => {
     // Core fields
     user.name = name || user.name;
     user.email = email ? email.toLowerCase() : user.email;
-    user.skillsOffered = Array.isArray(skillsOffered) ? skillsOffered : user.skillsOffered;
-    user.skillsWanted = Array.isArray(skillsWanted) ? skillsWanted : user.skillsWanted;
-    if (profilePicture !== undefined) user.profilePicture = profilePicture;
+    user.skillsOffered = Array.isArray(parsedSkillsOffered) ? parsedSkillsOffered : user.skillsOffered;
+    user.skillsWanted = Array.isArray(parsedSkillsWanted) ? parsedSkillsWanted : user.skillsWanted;
+    if (finalProfilePicture !== undefined) user.profilePicture = finalProfilePicture;
     if (password) user.password = password;
 
     // New profile fields
     if (bio !== undefined) user.bio = bio.slice(0, 300);
     if (location !== undefined) user.location = location;
     if (timezone !== undefined) user.timezone = timezone;
-    if (availableForSwap !== undefined) user.availableForSwap = availableForSwap;
-    if (coverImage !== undefined) user.coverImage = coverImage;
-    if (socialLinks !== undefined) {
+    if (availableForSwap !== undefined) user.availableForSwap = availableForSwap === 'true' || availableForSwap === true;
+    if (finalCoverImage !== undefined) user.coverImage = finalCoverImage;
+    if (parsedSocialLinks !== undefined) {
       user.socialLinks = {
-        github: socialLinks.github || '',
-        linkedin: socialLinks.linkedin || '',
-        portfolio: socialLinks.portfolio || ''
+        github: parsedSocialLinks.github || '',
+        linkedin: parsedSocialLinks.linkedin || '',
+        portfolio: parsedSocialLinks.portfolio || ''
       };
     }
 

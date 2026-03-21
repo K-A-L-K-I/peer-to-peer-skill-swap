@@ -1,5 +1,6 @@
 const express = require('express');
 const http = require('http');
+const path = require('path');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const dotenv = require('dotenv');
@@ -48,6 +49,10 @@ app.use(cors(corsOptions));
 
 // Middleware
 app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true }));
+
+// Serve static uploaded files
+app.use('/uploads', express.static(path.join(__dirname, 'public/uploads')));
 
 // Always use HTTP — Render (and most cloud platforms) handle HTTPS at the
 // load balancer level. Self-signed SSL certs are only needed for local LAN dev.

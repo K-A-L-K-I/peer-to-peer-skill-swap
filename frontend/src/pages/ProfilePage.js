@@ -61,7 +61,7 @@ function ProfilePage() {
     bio: '', location: '', timezone: '',
     availableForSwap: true,
     skillsOffered: '', skillsWanted: '',
-    profilePicture: null, coverImage: null,
+    profilePictureFile: null, coverImageFile: null,
     socialLinks: { github: '', linkedin: '', portfolio: '' }
   });
   const [previewImage, setPreviewImage] = useState(null);
@@ -93,12 +93,16 @@ function ProfilePage() {
         availableForSwap: user.availableForSwap ?? true,
         skillsOffered: stringifySkills(user.skillsOffered),
         skillsWanted: stringifySkills(user.skillsWanted),
-        profilePicture: user.profilePicture || null,
-        coverImage: user.coverImage || null,
+        profilePictureFile: null,
+        coverImageFile: null,
         socialLinks: user.socialLinks || { github: '', linkedin: '', portfolio: '' }
       });
-      setPreviewImage(user.profilePicture);
-      setPreviewCover(user.coverImage);
+
+      const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const getImageUrl = (path) => path && path.startsWith('/uploads/') ? `${API_URL}${path}` : path;
+
+      setPreviewImage(getImageUrl(user.profilePicture));
+      setPreviewCover(getImageUrl(user.coverImage));
 
       try {
         setReviewsLoading(true);
@@ -120,14 +124,16 @@ function ProfilePage() {
     if (!file) return;
     if (!file.type.startsWith('image/')) { setError('Please select a valid image file'); return; }
     if (file.size > 2 * 1024 * 1024) { setError('Image size must be less than 2MB'); return; }
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const b64 = reader.result;
-      if (isCover) { setPreviewCover(b64); setForm(p => ({ ...p, coverImage: b64 })); }
-      else { setPreviewImage(b64); setForm(p => ({ ...p, profilePicture: b64 })); }
-      setError('');
-    };
-    reader.readAsDataURL(file);
+
+    const previewUrl = URL.createObjectURL(file);
+    if (isCover) {
+      setPreviewCover(previewUrl);
+      setForm(p => ({ ...p, coverImageFile: file }));
+    } else {
+      setPreviewImage(previewUrl);
+      setForm(p => ({ ...p, profilePictureFile: file }));
+    }
+    setError('');
   };
 
   const handleChange = (e) => {
@@ -145,19 +151,29 @@ function ProfilePage() {
     e.preventDefault();
     setLoading(true); setMessage(''); setError('');
     try {
-      const { data } = await api.put('/auth/profile', {
-        name: form.name,
-        email: form.email,
-        password: form.password || undefined,
-        bio: form.bio,
-        location: form.location,
-        timezone: form.timezone,
-        availableForSwap: form.availableForSwap,
-        skillsOffered: parseSkills(form.skillsOffered),
-        skillsWanted: parseSkills(form.skillsWanted),
-        profilePicture: form.profilePicture,
-        coverImage: form.coverImage,
-        socialLinks: form.socialLinks
+      const formData = new FormData();
+      formData.append('name', form.name);
+      formData.append('email', form.email);
+      if (form.password) formData.append('password', form.password);
+      formData.append('bio', form.bio || '');
+      formData.append('location', form.location || '');
+      formData.append('timezone', form.timezone || '');
+      formData.append('availableForSwap', form.availableForSwap);
+      formData.append('skillsOffered', JSON.stringify(parseSkills(form.skillsOffered)));
+      formData.append('skillsWanted', JSON.stringify(parseSkills(form.skillsWanted)));
+      formData.append('socialLinks', JSON.stringify(form.socialLinks));
+
+      if (form.profilePictureFile) {
+        formData.append('profilePicture', form.profilePictureFile);
+      }
+      if (form.coverImageFile) {
+        formData.append('coverImage', form.coverImageFile);
+      }
+
+      const { data } = await api.put('/auth/profile', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
       });
       setMessage('Profile updated!');
       setForm(p => ({ ...p, password: '' }));
@@ -180,12 +196,16 @@ function ProfilePage() {
         availableForSwap: userData.availableForSwap ?? true,
         skillsOffered: stringifySkills(userData.skillsOffered),
         skillsWanted: stringifySkills(userData.skillsWanted),
-        profilePicture: userData.profilePicture || null,
-        coverImage: userData.coverImage || null,
+        profilePictureFile: null,
+        coverImageFile: null,
         socialLinks: userData.socialLinks || { github: '', linkedin: '', portfolio: '' }
       });
-      setPreviewImage(userData.profilePicture);
-      setPreviewCover(userData.coverImage);
+
+      const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+      const getImageUrl = (path) => path && path.startsWith('/uploads/') ? `${API_URL}${path}` : path;
+
+      setPreviewImage(getImageUrl(userData.profilePicture));
+      setPreviewCover(getImageUrl(userData.coverImage));
     }
     setIsEditing(false); setError(''); setMessage('');
   };
